@@ -1,0 +1,2 @@
+class UID(int):
+    pass
