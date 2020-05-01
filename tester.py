@@ -188,3 +188,5 @@ if __name__ == '__main__':
         programming.content = 'Programming'
         python.tags.add(programming)
     print(list(python.tags)[0].content)
+    revert.undo()
+    print(list(python.tags)[0].content)

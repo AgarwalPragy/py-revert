@@ -16,3 +16,11 @@ class NoSuchClassRegisteredError(DBError):
 
 class NoTransactionActiveError(DBError):
     pass
+
+
+class InTransactionError(DBError):
+    pass
+
+
+class AmbiguousRedoError(DBError):
+    pass
