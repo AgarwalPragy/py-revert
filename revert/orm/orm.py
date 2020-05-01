@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, cast, Dict, List, Type, Union
 
-from intent.intent import Intent
+from intent import Intent
 
 from exceptions import *
 from revert import Transaction
