@@ -1,5 +1,6 @@
 """Console script for revert."""
 import sys
+
 import click
 
 

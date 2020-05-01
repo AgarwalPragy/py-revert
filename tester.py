@@ -3,7 +3,8 @@ from __future__ import annotations
 from abc import ABC
 from typing import List
 
-from revert import AutoAdd, Calculate, Constraint, Entity, Field, MultiRelation, OnChange, ProtectedField, ProtectedMultiRelation, ProtectedRelation, Relation, ReverseOf
+import revert
+from revert.orm import AutoAdd, Calculate, Constraint, Entity, Field, MultiRelation, OnChange, ProtectedField, ProtectedMultiRelation, ProtectedRelation, Relation, ReverseOf
 
 
 class NoteStats(Entity):
@@ -179,5 +180,11 @@ class Shelf(Entity):
 
 
 if __name__ == '__main__':
-    n = MarkdownNote()
-    n.content = 'This is my first note!'
+    revert.connect('db/')
+    with revert.Transaction():
+        python = MarkdownNote()
+        python.content = 'Python Programming Language'
+        programming = MarkdownNote()
+        programming.content = 'Programming'
+        python.tags.add(programming)
+    print(list(python.tags)[0].content)

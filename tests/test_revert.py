@@ -6,8 +6,7 @@ import pytest
 
 from click.testing import CliRunner
 
-from revert import revert
-from revert import cli
+import cli
 
 
 @pytest.fixture
