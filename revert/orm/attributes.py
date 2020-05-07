@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Callable, Generic, Literal, Optional, overload, Type, TypeVar, Union
+from typing import Any, Callable, Generic, Literal, Optional, Type, TypeVar, Union, overload
 
 from revert import Transaction
 from .collection import ProtectedSet, Set
 from .entity import Entity
 
-__all__ = ['Field', 'ProtectedField', 'MultiField', 'ProtectedMultiField',
-           'Relation', 'ProtectedRelation', 'MultiRelation', 'ProtectedMultiRelation']
+__all__ = ['Field', 'CalculatedField', 'MultiField', 'ProtectedMultiField', 'CalculatedMultiField',
+           'Relation', 'ProtectedRelation', 'MultiRelation', 'ProtectedMultiRelation', 'CalculatedMultiRelation']
 
 primitives = Union[str, int, bool, float, None, complex, frozenset, tuple, bytes, datetime]
 T = TypeVar('T')
@@ -19,6 +19,9 @@ TValue = TypeVar('TValue', bound=Union[Entity, primitives])
 Converter = Callable[[Any], TPrimitive]
 With = Callable[[], Type[TEntity]]
 TDescriptor = TypeVar('TDescriptor', bound='Descriptor')
+
+
+# todo: optimize constraint enforcement
 
 
 class Descriptor(Generic[T], ABC):
@@ -47,11 +50,31 @@ class Descriptor(Generic[T], ABC):
         ...
 
 
-# todo: add support for volatile fields
+class IsField(ABC):
+    ...
 
-class Field(Generic[TPrimitive], Descriptor[TPrimitive]):
-    def __init__(self, converter: Converter, volatile: bool = False, index: bool = False, unique: bool = False, full_text_search: bool = False):
-        pass
+
+class IsRelation(ABC):
+    ...
+
+
+class IsMulti(ABC):
+    ...
+
+
+class IsProtected(ABC):
+    ...
+
+
+class IsCalculated(ABC):
+    ...
+
+
+class Field(Generic[TPrimitive], Descriptor[TPrimitive], IsField):
+    converter: Converter
+
+    def __init__(self, converter: Converter):
+        self.converter = converter
 
     def _get_value(self, instance: Entity) -> TPrimitive:
         return orm.get_value(Transaction.get(orm.get_binding(instance, self._attr_name)))
@@ -60,31 +83,47 @@ class Field(Generic[TPrimitive], Descriptor[TPrimitive]):
         Transaction.set(orm.get_binding(instance, self._attr_name), orm.get_repr(value))
 
 
-class ProtectedField(Generic[TPrimitive], Descriptor[TPrimitive]):
-    def __init__(self, converter: Converter, volatile: bool = False, index: bool = False, unique: bool = False, full_text_search: bool = False):
-        pass
+class CalculatedField(Generic[TPrimitive], Descriptor[TPrimitive], IsField, IsCalculated):
+    converter: Converter
+
+    def __init__(self, converter: Converter) -> None:
+        self.converter = converter
 
     def _get_value(self, instance: Entity) -> TPrimitive:
         return orm.get_value(Transaction.get(orm.get_binding(instance, self._attr_name)))
 
 
-class MultiField(Generic[TPrimitive], Descriptor[Set[TPrimitive]]):
-    def __init__(self, converter: Converter, volatile: bool = False, index: bool = False, unique: bool = False, full_text_search: bool = False):
-        pass
+class MultiField(Generic[TPrimitive], Descriptor[Set[TPrimitive]], IsField, IsMulti):
+    converter: Converter
+
+    def __init__(self, converter: Converter) -> None:
+        self.converter = converter
 
     def _get_value(self, instance: Entity) -> Set[TPrimitive]:
         return Set(__instance__=instance, __attr_name__=self._attr_name)
 
 
-class ProtectedMultiField(Generic[TPrimitive], Descriptor[ProtectedSet[TPrimitive]]):
-    def __init__(self, converter: Converter, volatile: bool = False, index: bool = False, unique: bool = False, full_text_search: bool = False):
-        pass
+class ProtectedMultiField(Generic[TPrimitive], Descriptor[ProtectedSet[TPrimitive]], IsField, IsMulti, IsProtected):
+    converter: Converter
+
+    def __init__(self, converter: Converter):
+        self.converter = converter
 
     def _get_value(self, instance: Entity) -> ProtectedSet[TPrimitive]:
         return ProtectedSet(__instance__=instance, __attr_name__=self._attr_name)
 
 
-class Relation(Generic[TEntity], Descriptor[TEntity]):
+class CalculatedMultiField(Generic[TPrimitive], Descriptor[ProtectedSet[TPrimitive]], IsField, IsMulti, IsCalculated):
+    converter: Converter
+
+    def __init__(self, converter: Converter):
+        self.converter = converter
+
+    def _get_value(self, instance: Entity) -> ProtectedSet[TPrimitive]:
+        return ProtectedSet(__instance__=instance, __attr_name__=self._attr_name)
+
+
+class Relation(Generic[TEntity], Descriptor[TEntity], IsRelation):
     def __init__(self, with_: With):
         pass
 
@@ -95,7 +134,7 @@ class Relation(Generic[TEntity], Descriptor[TEntity]):
         Transaction.set(orm.get_binding(instance, self._attr_name), orm.get_repr(value))
 
 
-class ProtectedRelation(Generic[TEntity], Descriptor[TEntity]):
+class ProtectedRelation(Generic[TEntity], Descriptor[TEntity], IsRelation, IsProtected):
     def __init__(self, with_: With):
         pass
 
@@ -103,7 +142,7 @@ class ProtectedRelation(Generic[TEntity], Descriptor[TEntity]):
         return orm.get_value(Transaction.get(orm.get_binding(instance, self._attr_name)))
 
 
-class MultiRelation(Generic[TEntity], Descriptor[Set[TEntity]]):
+class MultiRelation(Generic[TEntity], Descriptor[Set[TEntity]], IsRelation, IsMulti):
     def __init__(self, with_: With):
         pass
 
@@ -111,7 +150,15 @@ class MultiRelation(Generic[TEntity], Descriptor[Set[TEntity]]):
         return Set(__instance__=instance, __attr_name__=self._attr_name)
 
 
-class ProtectedMultiRelation(Generic[TEntity], Descriptor[ProtectedSet[TEntity]]):
+class ProtectedMultiRelation(Generic[TEntity], Descriptor[ProtectedSet[TEntity]], IsRelation, IsMulti, IsProtected):
+    def __init__(self, with_: With):
+        pass
+
+    def _get_value(self, instance: Entity) -> ProtectedSet[TEntity]:
+        return ProtectedSet(__instance__=instance, __attr_name__=self._attr_name)
+
+
+class CalculatedMultiRelation(Generic[TEntity], Descriptor[ProtectedSet[TEntity]], IsRelation, IsMulti, IsCalculated):
     def __init__(self, with_: With):
         pass
 

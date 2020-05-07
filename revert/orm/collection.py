@@ -27,7 +27,7 @@ class BaseSet(Generic[TValue]):
     def __iter__(self):
         pattern = f'{self.__binding__}/items'
         start = len(pattern) + 1
-        for key in Transaction.match(pattern):
+        for key in Transaction.match_keys(pattern):
             value = orm.get_value(key[start:])
             yield value
 
@@ -53,7 +53,7 @@ class BaseSet(Generic[TValue]):
         Transaction.set(f'{self.__binding__}/items/{orm.get_repr(item)}', '')
 
     def _clear(self) -> None:
-        for key in Transaction.match(f'{self.__binding__}/items'):
+        for key in Transaction.match_keys(f'{self.__binding__}/items'):
             Transaction.delete(key)
 
     def _pop(self) -> TValue:
@@ -128,11 +128,11 @@ class BaseSet(Generic[TValue]):
         (i.e. all elements that are in either set.)
         """
 
-    def __update(self, *items: tSet[TValue]) -> None:
+    def _update(self, *items: tSet[TValue]) -> None:
         """ Update a set with the union of itself and others. """
         for collection in items:
             for item in collection:
-                self.__add(item)
+                self._add(item)
 
     def __and__(self, *args, **kwargs):
         """ Return self&value. """

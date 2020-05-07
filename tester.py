@@ -1,57 +1,52 @@
 from __future__ import annotations
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import List
 
 import revert
-from revert.orm import AutoAdd, Calculate, Constraint, Entity, Field, MultiRelation, OnChange, ProtectedField, ProtectedMultiRelation, ProtectedRelation, Relation, ReverseOf
+from orm import constraints
+from revert.orm import Entity
+from revert.orm.attributes import CalculatedField, CalculatedMultiRelation, Field, MultiRelation, ProtectedMultiRelation, ProtectedRelation, Relation
+from revert.orm.constraints import Contributes, FormulaDependency, FullTextSearch, Index, OnChange, OneToOne, Reverse, SortedIndex, Unique
 
 
 class NoteStats(Entity):
-    clicks = Field(int)
-    ctr = ProtectedField(float, index=True)
+    ctr = CalculatedField(float)
     note = ProtectedRelation(lambda: BaseNote)
+
     views = Field(int)
+    clicks = Field(int)
     votes = Field(int)
 
-    @classmethod
-    def enforced_constraints(cls) -> List[Constraint]:
-        return [
-            Calculate(cls.ctr, based_on=[cls.clicks, cls.views], formula=cls._calculate_ctr)
-        ]
-
-    def _calculate_ctr(self) -> float:
+    def _formula_ctr(self) -> float:
         return self.clicks / (self.views + 1.0)
+
+    @classmethod
+    def attribute_constraints(cls) -> List[constraints.Constraint]:
+        return super().attribute_constraints() + [
+            SortedIndex(cls.ctr),
+            FormulaDependency(cls.ctr, dependency=cls.clicks),
+            FormulaDependency(cls.ctr, dependency=cls.views),
+        ]
 
 
 class BaseNote(Entity, ABC):
-    access_level = Field(str, index=True)
     children = ProtectedMultiRelation(lambda: BaseNote)
     extracted = ProtectedMultiRelation(lambda: BaseNote)
     parents = ProtectedMultiRelation(lambda: BaseNote)
-    searchable_text = ProtectedField(str, full_text_search=True)
     shelves = ProtectedMultiRelation(lambda: Shelf)
-    source = Relation(lambda: BaseNote)
     stats = ProtectedRelation(lambda: NoteStats)
-    title = ProtectedField(str, full_text_search=True)
+    title = CalculatedField(str)
+    searchable_text = CalculatedField(str)
 
-    @classmethod
-    def enforced_constraints(cls) -> List[Constraint]:
-        return [
-            ReverseOf(cls.extracted, cls.source),
-            ReverseOf(cls.extracted, cls.source),
-            ReverseOf(cls.shelves, Shelf.notes),  # enforce the other way
-            ReverseOf(cls.parents, cls.children),
-            OnChange(cls.parents, trigger=cls._parents_changed),
-            AutoAdd(cls.source, to=cls.parents),
-            AutoAdd(cls.extracted, to=cls.children),
-        ]
+    access_level = Field(str)
+    source = Relation(lambda: BaseNote)
 
-    def __init__(self):
+    def __init__(self, access_level: str = 'default'):
         pass
         # Shelf.get(name='orphans').notes.add(self)
 
-    def _parents_changed(self):
+    def check_orphan(self):
         if not self.parents:
             Shelf.get(name='orphans').notes.add(self)
         else:
@@ -64,28 +59,60 @@ class BaseNote(Entity, ABC):
         Shelf.get(name='orphans').notes.discard(self)
         super().delete()
 
+    @abstractmethod
+    def _formula_searchable_text(self, trigger: str) -> str:
+        ...
 
-class MarkdownNote(BaseNote):
-    content = Field(str)
-    references = ProtectedMultiRelation(lambda: BaseNote)
-    referenced_by = ProtectedMultiRelation(lambda: MarkdownNote)
-    tags = MultiRelation(lambda: BaseNote)
-    tagged_by = ProtectedMultiRelation(lambda: MarkdownNote)
+    @abstractmethod
+    def _formula_title(self, trigger: str) -> str:
+        ...
 
     @classmethod
-    def enforced_constraints(cls):
-        return super().enforced_constraints() + [
-            Calculate(cls.searchable_text, based_on=cls.content, formula=lambda self: self.content),
-            Calculate(cls.title, based_on=cls.content, formula=lambda self: [stripped for line in self.content.split('\n') if (stripped := line.strip())][0]),
-            Calculate(cls.references, based_on=cls.content, formula=cls._extract_references),
-            ReverseOf(cls.references, cls.referenced_by),
-            ReverseOf(cls.tags, cls.tagged_by),
-            AutoAdd(cls.references, to=cls.children),
-            AutoAdd(cls.tags, to=cls.parents),
+    def attribute_constraints(cls) -> List[constraints.Constraint]:
+        return super().attribute_constraints() + [
+            OneToOne(NoteStats.note, cls.stats),
+            Index(cls.access_level),
+            FullTextSearch(cls.searchable_text),
+            FullTextSearch(cls.title),
+            Reverse(cls.extracted, cls.source),
+            Reverse(cls.parents, cls.children),
+            OnChange(cls.parents, trigger=cls.check_orphan),
+            Contributes(cls.source, to=cls.parents),
+            Contributes(cls.extracted, to=cls.children),
         ]
 
-    def _extract_references(self):
-        self.references = []
+
+class MarkdownNote(BaseNote):
+    references = CalculatedMultiRelation(lambda: BaseNote)
+    referenced_by = ProtectedMultiRelation(lambda: MarkdownNote)
+    tagged_by = ProtectedMultiRelation(lambda: MarkdownNote)
+
+    content = Field(str)
+    tags = MultiRelation(lambda: BaseNote)
+
+    def _formula_references(self) -> List[BaseNote]:
+        print(self)
+        return []
+
+    def _formula_searchable_text(self, trigger: str) -> str:
+        return self.content
+
+    def _formula_title(self, trigger: str) -> str:
+        return [stripped for line in self.content.split('\n') if (stripped := line.strip())][0]
+
+    @classmethod
+    def attribute_constraints(cls) -> List[constraints.Constraint]:
+        return super().attribute_constraints() + [
+            FormulaDependency(cls.searchable_text, dependency=cls.content),
+            FormulaDependency(cls.title, dependency=cls.content),
+            FormulaDependency(cls.references, dependency=cls.content),
+            Reverse(cls.references, cls.referenced_by),
+            Reverse(cls.tags, cls.tagged_by),
+            Contributes(cls.references, to=cls.children),
+            Contributes(cls.referenced_by, to=cls.parents),
+            Contributes(cls.tags, to=cls.parents),
+            Contributes(cls.tagged_by, to=cls.children),
+        ]
 
 
 class VocabNote(BaseNote):
@@ -94,46 +121,88 @@ class VocabNote(BaseNote):
     synonyms = MultiRelation(lambda: BaseNote)
     antonyms = MultiRelation(lambda: BaseNote)
 
+    def _formula_searchable_text(self, trigger: str) -> str:
+        return self.word + self.meaning
+
+    def _formula_title(self, trigger: str) -> str:
+        return f'{self.word} (Vocab)'
+
     @classmethod
-    def enforced_constraints(cls):
-        return super().enforced_constraints() + [
-            Calculate(cls.searchable_text, based_on=[cls.word, cls.meaning], formula=lambda self: self.word + self.meaning),
-            Calculate(cls.title, based_on=cls.word, formula=lambda self: f'{self.word} (Vocab)'),
-            ReverseOf(cls.synonyms, cls.synonyms),
-            ReverseOf(cls.antonyms, cls.antonyms),
-            AutoAdd(cls.synonyms, to=cls.parents),
-            AutoAdd(cls.synonyms, to=cls.children),
-            AutoAdd(cls.antonyms, to=cls.parents),
-            AutoAdd(cls.antonyms, to=cls.children),
+    def attribute_constraints(cls) -> List[constraints.Constraint]:
+        return super().attribute_constraints() + [
+            FormulaDependency(cls.searchable_text, dependency=cls.word),
+            FormulaDependency(cls.searchable_text, dependency=cls.meaning),
+            FormulaDependency(cls.title, dependency=cls.word),
+            Reverse(cls.synonyms, cls.synonyms),
+            Reverse(cls.antonyms, cls.antonyms),
+            Contributes(cls.synonyms, to=cls.parents),
+            Contributes(cls.synonyms, to=cls.children),
+            Contributes(cls.antonyms, to=cls.parents),
+            Contributes(cls.antonyms, to=cls.children),
         ]
 
 
-class ResourceNote(BaseNote):
+class ResourceNote(BaseNote, ABC):
     mime = Field(str)
-    url = Field(str, index=True, unique=True)
+    url = Field(str)
     metadata = Field(str)
 
+    @abstractmethod
+    def _formula_searchable_text(self, trigger: str) -> str:
+        ...
+
+    @abstractmethod
+    def _formula_title(self, trigger: str) -> str:
+        ...
+
     @classmethod
-    def enforced_constraints(cls):
-        return super().enforced_constraints() + [
-            Calculate(cls.searchable_text, based_on=[cls.url, cls.metadata], formula=lambda self: self.url + self.metadata),
-            Calculate(cls.title, based_on=cls.metadata, formula=lambda self: self.metadata),
+    def attribute_constraints(cls) -> List[constraints.Constraint]:
+        return super().attribute_constraints() + [
+            FormulaDependency(cls.searchable_text, dependency=cls.url),
+            FormulaDependency(cls.searchable_text, dependency=cls.metadata),
+            FormulaDependency(cls.title, dependency=cls.metadata),
+            Index(cls.mime),
+            Index(cls.url),
+            Unique(cls.url),
         ]
 
 
-class VideoRN(ResourceNote):
+class DefaultResourceNote(ResourceNote):
+    def _formula_searchable_text(self, trigger: str) -> str:
+        return self.url + self.metadata
+
+    def _formula_title(self, trigger: str) -> str:
+        return self.metadata
+
+    @classmethod
+    def attribute_constraints(cls) -> List[constraints.Constraint]:
+        return super().attribute_constraints() + [
+            FormulaDependency(cls.title, dependency=cls.metadata),
+        ]
+
+
+class VideoRN(ResourceNote, ABC):
     pass
 
 
 class YoutubeVRN(VideoRN):
     captions = Field(str)
     description = Field(str)
+    video_title = Field(str)
+
+    def _formula_searchable_text(self, trigger: str) -> str:
+        return self.url + self.metadata + self.captions + self.description + self.video_title
+
+    def _formula_title(self, trigger: str) -> str:
+        return self.video_title
 
     @classmethod
-    def enforced_constraints(cls):
-        return super().enforced_constraints() + [
-            Calculate(cls.searchable_text, based_on=[cls.url, cls.metadata, cls.captions, cls.description],
-                      formula=lambda self: self.url + self.metadata + self.captions + self.description),
+    def attribute_constraints(cls) -> List[constraints.Constraint]:
+        return super().attribute_constraints() + [
+            FormulaDependency(cls.searchable_text, dependency=cls.captions),
+            FormulaDependency(cls.searchable_text, dependency=cls.description),
+            FormulaDependency(cls.searchable_text, dependency=cls.video_title),
+            FormulaDependency(cls.title, dependency=cls.video_title),
         ]
 
 
@@ -142,15 +211,25 @@ class WikipediaRN(ResourceNote):
 
 
 class StackOverflowRN(ResourceNote):
+    question_title = Field(str)
     question = Field(str)
     selected_answer = Field(str)
     other_top_answer = Field(str)
 
+    def _formula_searchable_text(self, trigger: str) -> str:
+        return self.question_title + self.question + self.selected_answer + self.other_top_answer + self.metadata + self.url
+
+    def _formula_title(self, trigger: str) -> str:
+        return self.question_title
+
     @classmethod
-    def enforced_constraints(cls):
-        return super().enforced_constraints() + [
-            Calculate(cls.searchable_text, based_on=[cls.url, cls.metadata, cls.question, cls.selected_answer, cls.other_top_answer],
-                      formula=lambda self: self.url + self.metadata + self.question + self.answer + self.other_top_answer),
+    def attribute_constraints(cls) -> List[constraints.Constraint]:
+        return super().attribute_constraints() + [
+            FormulaDependency(cls.searchable_text, dependency=cls.question_title),
+            FormulaDependency(cls.searchable_text, dependency=cls.question),
+            FormulaDependency(cls.searchable_text, dependency=cls.selected_answer),
+            FormulaDependency(cls.searchable_text, dependency=cls.other_top_answer),
+            FormulaDependency(cls.title, dependency=cls.question_title),
         ]
 
 
@@ -164,24 +243,25 @@ class FileRN(ResourceNote):
 
 class Shelf(Entity):
     votes = Field(int)
-    name = Field(str, unique=True, index=True)
+    name = Field(str)
     notes = MultiRelation(lambda: BaseNote)
 
-    @classmethod
-    def enforced_constraints(cls):
-        return [
-            ReverseOf(cls.notes, BaseNote.shelves),
-        ]
+    def __init__(self, name: str) -> None:
+        self.name = name
 
-    def before_change(self):
-        super().before_change()
-        if self.name == 'orphans':
-            self.votes = 0
+    @classmethod
+    def attribute_constraints(cls) -> List[constraints.Constraint]:
+        return super().attribute_constraints() + [
+            Reverse(Shelf.notes, BaseNote.shelves),
+            Unique(Shelf.name),
+            Index(Shelf.name),
+        ]
 
 
 if __name__ == '__main__':
     revert.connect('db/')
     with revert.Transaction():
+        orphans = Shelf('orphans')
         python = MarkdownNote()
         python.content = 'Python Programming Language'
         programming = MarkdownNote()
@@ -189,4 +269,5 @@ if __name__ == '__main__':
         python.tags.add(programming)
     print(list(python.tags)[0].content)
     revert.undo()
+    print('after undo')
     print(list(python.tags)[0].content)

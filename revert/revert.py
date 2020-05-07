@@ -5,22 +5,27 @@ import os
 from collections import defaultdict
 from datetime import datetime
 from functools import wraps
-from typing import Callable, ClassVar, DefaultDict, Dict, List, Optional, TypeVar
+from typing import Callable, ClassVar, DefaultDict, List, Optional, Tuple, TypeVar
 from uuid import uuid4
 
+from intent import Intent
+
 from exceptions import AmbiguousRedoError, InTransactionError, NoTransactionActiveError
+from trie import TrieDict
 from . import config
 
 TCallable = TypeVar('TCallable', bound=Callable)
 
-__all__ = ['connect', 'Transaction', 'undo', 'redo', 'checkout']
+__all__ = ['connect', 'Transaction', 'undo', 'redo', 'checkout', 'intent_db_connected']
 
 head: str = config.init_commit
-data: Dict[str, str] = {}
+data = TrieDict()
 commit_parent = {}
 commit_children: DefaultDict[str, List[str]] = defaultdict(list)
 dir_: str
-
+intent_db_connected: Intent[str] = Intent()
+# todo: add more hooks
+# todo: add global context manager to ensure data is saved in case of program termination
 _deleted = object()
 
 
@@ -30,24 +35,25 @@ def connect(directory: str) -> None:
     head_path = os.path.join(directory, config.head_file)
     if not os.path.exists(head_path):
         head = config.init_commit
-        data = {}
+        data = TrieDict()
     else:
         with open(head_path, 'r') as f:
             temp = json.loads(f.read())
             head = temp['head']
-            data = temp['data']
+            data = TrieDict.from_json(temp['data'])
         with open(os.path.join(dir_, config.commit_parent_file), 'r') as f:
             temp = (line.split(',') for line in f.readlines())
             commit_parent = {line[0]: line[1] for line in temp}
             for commit, parent in commit_parent.items():
                 commit_children[parent].append(commit)
+    intent_db_connected.announce(directory)
 
 
 def _save() -> None:
     with open(os.path.join(dir_, config.head_file), 'w') as f:
         f.write(json.dumps({
             'head': head,
-            'data': data,
+            'data': data.to_json(),
         }, indent=4, sort_keys=True))
 
 
@@ -55,9 +61,11 @@ class Transaction:
     transaction_stack: ClassVar[List[Transaction]] = []
     messages: ClassVar[List[str]] = []
 
-    dirty: Dict[str, str]
+    dirty: TrieDict
+    deleted: TrieDict
     message: str
     rollback_on_error: bool
+    ignore_if_no_change: bool
     parent_transaction: Optional[Transaction] = None
 
     @staticmethod
@@ -65,43 +73,64 @@ class Transaction:
         return Transaction.transaction_stack[-1]
 
     @staticmethod
+    def _commit_sub_transaction(parent_dirty: TrieDict, parent_deleted: TrieDict, dirty: TrieDict, deleted: TrieDict) -> None:
+        for key, value in dirty.items():
+            parent_dirty[key] = value
+            parent_deleted.discard(key)
+        for key, value in deleted.items():
+            parent_deleted[key] = value
+            parent_dirty.discard(key)
+
+    @staticmethod
     def force_commit():
         global data, head
-        dirty = {}
+        all_dirty = TrieDict()
+        all_deleted = TrieDict()
         messages = []
         for transaction in Transaction.transaction_stack:
-            dirty.update(transaction.dirty)
+            Transaction._commit_sub_transaction(all_dirty, all_deleted, transaction.dirty, transaction.deleted)
             messages.append(transaction.message)
         commit_id = f'{datetime.now()}_{uuid4()}'
         with open(os.path.join(dir_, f'{commit_id}.json'), 'w') as f:
             f.write(json.dumps({
                 'parent': head,
-                'old': {key: data[key] for key in dirty if key in data},
-                'new': dirty,
+                'old': TrieDict({key: data[key] for key in all_dirty if key in data}).to_json(),
+                'new': all_dirty.to_json(),
+                'messages': messages,
             }, indent=4, sort_keys=True))
         with open(os.path.join(dir_, config.commit_parent_file), 'a') as f:
             f.write(f'{commit_id},{head}\n')
         commit_parent[commit_id] = head
-        data.update(dirty)
+        data.update(all_dirty)
         head = commit_id
         _save()
         Transaction.transaction_stack = []
         Transaction.messages = []
 
     @staticmethod
-    def get(key: str, default: Optional[str] = None) -> str:
+    def get(key: str, safe: bool = False) -> Optional[str]:
         for transaction in Transaction.transaction_stack[::-1]:
-            value = transaction.dirty.get(key, None)
+            value = transaction.deleted.get(key)
+            if value is not None:
+                if not safe:
+                    raise KeyError(key)
+                return None
+            value = transaction.dirty.get(key)
             if value is not None:
                 return value
-        if default is not None:
-            return data.get(key, default)
+        value = data.get(key)
+        if value is None:
+            if not safe:
+                raise KeyError(key)
+            return None
         else:
-            return data[key]
+            return value
 
     @staticmethod
     def has(key: str) -> bool:
         for transaction in Transaction.transaction_stack[::-1]:
+            if key in Transaction.deleted:
+                return False
             if key in transaction.dirty:
                 return True
         return key in data
@@ -110,52 +139,77 @@ class Transaction:
     def set(key: str, value: str) -> None:
         if not Transaction.transaction_stack:
             raise NoTransactionActiveError('Cannot change database values outside a transaction')
-        Transaction.transaction_stack[-1].dirty[key] = value
+        tr = Transaction.transaction_stack[-1]
+        tr.deleted.discard(key)
+        tr.dirty[key] = value
 
     @staticmethod
     def delete(key: str, ignore_if_not_present: bool = False) -> None:
-        pass
+        if not Transaction.transaction_stack:
+            raise NoTransactionActiveError('Cannot delete database values outside a transaction')
+        if Transaction.has(key):
+            Transaction.transaction_stack[-1].deleted[key] = ''
+            Transaction.transaction_stack[-1].discard(key)
+        elif not ignore_if_not_present:
+            raise KeyError(key)
 
     @classmethod
-    def match(cls, pattern: str) -> List[str]:
-        items = data.copy()
+    def match_keys(cls, pattern: str) -> List[str]:
+        keys = set(data.keys(pattern))
+        transaction: Transaction
         for transaction in Transaction.transaction_stack:
-            items.update(transaction.dirty)
-        return [key for key in items.keys() if key.startswith(pattern)]
+            for key in transaction.dirty.keys(pattern):
+                keys.add(key)
+            for key in transaction.deleted.keys(pattern):
+                keys.discard(key)
+        return list(keys)
+
+    @classmethod
+    def match_items(cls, pattern: str) -> List[Tuple[str, str]]:
+        items = {key: value for key, value in data.items(pattern)}
+        transaction: Transaction
+        for transaction in Transaction.transaction_stack:
+            for key, value in transaction.dirty.items(pattern):
+                items[key] = value
+            for key in transaction.deleted.items(pattern):
+                if key in items:
+                    del items[key]
+        return list(items)
 
     @classmethod
     def match_count(cls, pattern: str) -> int:
-        items = data.copy()
-        for transaction in Transaction.transaction_stack:
-            items.update(transaction.dirty)
-        return sum(1 for key in items.keys() if key.startswith(pattern))
+        if Transaction.transaction_stack:
+            return len(Transaction.match_keys(pattern))
+        return data.count(pattern)
 
-    def __init__(self, message: str = '', rollback_on_error: bool = True):
+    def __init__(self, message: str = '', rollback_on_error: bool = True, ignore_if_no_change: bool = False):
         self.message = message
         self.rollback_on_error = rollback_on_error
+        self.ignore_if_no_change = ignore_if_no_change
 
     def __call__(self, func: TCallable) -> TCallable:
         @wraps
         def wrapped(*args, **kwargs):
-            with Transaction(message=self.message, rollback_on_error=self.rollback_on_error) as t:
+            with Transaction(message=self.message, rollback_on_error=self.rollback_on_error, ignore_if_no_change=self.ignore_if_no_change):
                 func(*args, **kwargs)
 
         return wrapped
 
     def __enter__(self):
-        self.dirty = {}
+        self.dirty = TrieDict()
+        self.deleted = TrieDict()
         if Transaction.transaction_stack:
             self.parent_transaction = Transaction.transaction_stack[-1]
         Transaction.transaction_stack.append(self)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.dirty:
+        if self.dirty or self.deleted or not self.ignore_if_no_change:
             Transaction.messages.append(self.message)
         parent = self.parent_transaction
         if parent is None:
             Transaction.force_commit()
         else:
-            parent.dirty.update(self.dirty)
+            Transaction._commit_sub_transaction(parent.dirty, parent.deleted, self.dirty, self.deleted)
             Transaction.transaction_stack.pop()
 
     @staticmethod
@@ -213,8 +267,8 @@ def undo() -> None:
     parent = commit_parent[head]
     with open(os.path.join(dir_, f'{head}.json'), 'r') as f:
         temp = json.loads(f.read())
-        old = temp['old']
-        new = temp['new']
+        old = TrieDict.from_json(temp['old'])
+        new = TrieDict.from_json(temp['new'])
         assert parent == temp['parent']
         for key in new:
             del data[key]

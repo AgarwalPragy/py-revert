@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from abc import ABC, abstractmethod
+from abc import ABC
 from datetime import datetime
 from typing import Any, Iterable, List, Type, TypeVar
 
@@ -9,6 +9,7 @@ from revert import Transaction
 
 __all__ = ['Entity', 'UID']
 
+T = TypeVar('T')
 TEntity = TypeVar('TEntity', bound='Entity')
 
 
@@ -34,6 +35,12 @@ class UID:
         return f'UUID(val={self.val})'
 
 
+def clone(obj: T) -> T:
+    copy = object.__new__(obj.__class__)
+    copy.__dict__ = obj.__dict__.copy()
+    return copy
+
+
 class Entity(ABC):
     __class_reference__: str
     __uid__: UID
@@ -57,11 +64,20 @@ class Entity(ABC):
 
     @classmethod
     def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
+        for attr_name in dir(cls):
+            try:
+                attr = getattr(cls, attr_name)
+                if isinstance(attr, attributes.Descriptor):
+                    if attr._owner_class != cls:
+                        copy = clone(attr)
+                        copy._owner_class = cls
+                        setattr(cls, attr_name, copy)
+            except Exception:
+                pass
         orm.register_class(cls)
 
     def __new__(cls, *args, **kwargs):
-        obj = super().__new__(cls, *args, **kwargs)
+        obj = object.__new__(cls)
         orm.register_object(obj)
         return obj
 
@@ -88,7 +104,7 @@ class Entity(ABC):
         return orm.get_instance(uid)
 
     @classmethod
-    def get(cls: Type[TEntity], *args, **kwargs) -> TEntity:
+    def get(cls: Type[TEntity], **kwargs) -> TEntity:
         pass
 
     def changed(self):
@@ -96,12 +112,11 @@ class Entity(ABC):
 
     @classmethod
     def class_reference(cls: Type[Entity]) -> str:
-        return f'{cls.__module__}.{cls.__qualname__}'
+        return f'{cls.__qualname__}'
 
     @classmethod
-    @abstractmethod
-    def enforced_constraints(cls) -> List[constraints.Constraint]:
-        pass
+    def attribute_constraints(cls) -> List[constraints.Constraint]:
+        return []
 
 
-from . import orm, constraints
+from . import orm, constraints, attributes

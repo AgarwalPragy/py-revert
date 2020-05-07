@@ -10,3 +10,7 @@ __all__ = revert.__all__ + ['orm', '__author__', '__email__', '__version__', 'co
 
 # noinspection PyUnresolvedReferences
 from . import orm
+
+# todo: remodel revert as a vcs+db
+# todo: add content hash based verification and security
+# todo: add sync with dropbox, google drive, github, and support for custom syncs

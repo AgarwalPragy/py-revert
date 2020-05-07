@@ -2,12 +2,12 @@ from __future__ import annotations
 
 # noinspection PyUnresolvedReferences
 from datetime import datetime
-from typing import Any, cast, Dict, List, Type, Union
+from typing import Any, Dict, List, Type, Union, cast
 
 from intent import Intent
 
 from exceptions import *
-from revert import Transaction
+from revert import Transaction, intent_db_connected
 from . import config
 from .entity import Entity, UID
 
@@ -19,6 +19,13 @@ object_cache: Dict[UID, Entity] = {}
 intent_class_registered: Intent[Type[Entity]] = Intent()
 intent_entity_created: Intent[Entity] = Intent()
 intent_entity_before_delete: Intent[Entity] = Intent()
+
+
+def db_connected(directory: str) -> None:
+    with Transaction(message='schema change'):
+        for cls in classes.values():
+            mro = ','.join([parent.class_reference() for parent in cls.mro() if issubclass(parent, Entity)])
+            Transaction.set(f'{config.base}/classes/{cls.class_reference()}/mro', mro)
 
 
 def register_class(cls: Type[Entity]) -> None:
@@ -34,7 +41,9 @@ def register_object(obj: Entity) -> None:
     uid = UID()
     object.__setattr__(obj, '__uid__', uid)
     object.__setattr__(obj, '__class_reference__', class_reference)
-    Transaction.set(f'{config.base}/classes/{class_reference}/objects/{uid}', '')
+    for cls in obj.__class__.mro():
+        if issubclass(cls, Entity):
+            Transaction.set(f'{config.base}/classes/{cls.class_reference()}/objects/{uid}', '')
     Transaction.set(f'{config.base}/objects/{uid}/class_reference', class_reference)
     Transaction.set(f'{config.base}/objects/{uid}/uid', str(uid))
     object_cache[uid] = obj
@@ -45,7 +54,7 @@ def delete_object(obj: Entity) -> None:
     intent_entity_before_delete.announce(obj)
     uid = object.__getattribute__(obj, '__uid__')
     class_reference = object.__getattribute__(obj, '__class_reference__')
-    for key in Transaction.match(f'{config.base}/objects/{uid}'):
+    for key in Transaction.match_keys(f'{config.base}/objects/{uid}'):
         Transaction.delete(key)
     Transaction.delete(f'{config.base}/classes/{class_reference}/objects/{uid}')
 
@@ -58,7 +67,7 @@ def get_binding(obj: Entity, attr: str) -> str:
 def get_all_attrs(obj: Entity) -> List[str]:
     uid = object.__getattribute__(obj, '__uid__')
     trim_length = len(f'{config.base}/objects/{uid}/attrs/')
-    return [key[trim_length:].split('/')[0] for key in Transaction.match(f'{config.base}/objects/{uid}/attrs/')]
+    return [key[trim_length:].split('/')[0] for key in Transaction.match_keys(f'{config.base}/objects/{uid}/attrs/')]
 
 
 def get_instance(uid: Union[str, UID]) -> Entity:
@@ -84,5 +93,8 @@ def get_repr(item: Any) -> str:
         return repr_
 
 
-def get_value(repr: str) -> Any:
-    return eval(repr)
+def get_value(repr_: str) -> Any:
+    return eval(repr_)
+
+
+intent_db_connected.subscribe(db_connected)
