@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any, Dict, Generator, Iterator, List, Mapping, Optional, Tuple, Union
 
-separator = '/'
+import config
 
 
 def split_first(key: str) -> Tuple[str, str]:
-    index = key.find(separator)
+    index = key.find(config.key_separator)
     if index == -1:
         return key, ''
     else:
@@ -105,7 +105,7 @@ class TrieDict(Mapping[str, str]):
             for key, item in self._children.items():
                 for k in item:
                     if k:
-                        yield key + separator + k
+                        yield key + config.key_separator + k
                     else:
                         yield key
         else:
@@ -113,7 +113,7 @@ class TrieDict(Mapping[str, str]):
             if p not in self._children:
                 return
             for key in self._children[p].keys(prefix):
-                yield p + separator + key
+                yield p + config.key_separator + key
 
     def items(self, prefix: str = '') -> Generator[Tuple[str, str], None, None]:
         if not prefix:
@@ -122,7 +122,7 @@ class TrieDict(Mapping[str, str]):
             for prefix, child in self._children.items():
                 for key, value in child.items():
                     if key:
-                        yield prefix + separator + key, value
+                        yield prefix + config.key_separator + key, value
                     else:
                         yield prefix, value
         else:
@@ -130,7 +130,7 @@ class TrieDict(Mapping[str, str]):
             if p not in self._children:
                 return
             for key, value in self._children[p].items(prefix):
-                yield p + separator + key, value
+                yield p + config.key_separator + key, value
 
     def count(self, prefix: str = '') -> int:
         if not prefix:

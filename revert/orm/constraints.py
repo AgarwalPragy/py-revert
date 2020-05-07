@@ -26,9 +26,9 @@ class Constraint(ABC):
 
 class Contributes(Constraint):
     attr: attributes.Descriptor
-    to: attributes.IsMulti
+    to: attributes.UnionRelation
 
-    def __init__(self, attr: attributes.Descriptor, *, to: attributes.IsMulti) -> None:
+    def __init__(self, attr: attributes.Descriptor, *, to: attributes.UnionRelation) -> None:
         self.attr = attr
         self.to = to
 

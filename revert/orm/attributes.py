@@ -8,8 +8,9 @@ from revert import Transaction
 from .collection import ProtectedSet, Set
 from .entity import Entity
 
-__all__ = ['Field', 'CalculatedField', 'MultiField', 'ProtectedMultiField', 'CalculatedMultiField',
-           'Relation', 'ProtectedRelation', 'MultiRelation', 'ProtectedMultiRelation', 'CalculatedMultiRelation']
+__all__ = ['Field', 'CalculatedField', 'MultiField', 'CalculatedMultiField', 'UnionField',
+           'UnionRelation', 'BackReference', 'BackReferences',
+           'Relation', 'MultiRelation', 'CalculatedMultiRelation']
 
 primitives = Union[str, int, bool, float, None, complex, frozenset, tuple, bytes, datetime]
 T = TypeVar('T')
@@ -81,6 +82,30 @@ class Field(Generic[TPrimitive], Descriptor[TPrimitive], IsField):
 
     def __set__(self, instance: Entity, value: TPrimitive) -> None:
         Transaction.set(orm.get_binding(instance, self._attr_name), orm.get_repr(value))
+
+
+class UnionRelation(Generic[TEntity], Descriptor[ProtectedSet[TEntity]]):
+    def __init__(self, with_: With):
+        pass
+
+    def _get_value(self, instance: Entity) -> ProtectedSet[TEntity]:
+        pass
+
+
+class BackReference(Generic[TEntity], Descriptor[TEntity]):
+    def __init__(self, with_: With):
+        pass
+
+    def _get_value(self, instance: Entity) -> TEntity:
+        pass
+
+
+class BackReferences(Generic[TEntity], Descriptor[ProtectedSet[TEntity]]):
+    def __init__(self, with_: With):
+        pass
+
+    def _get_value(self, instance: Entity) -> ProtectedSet[TEntity]:
+        pass
 
 
 class CalculatedField(Generic[TPrimitive], Descriptor[TPrimitive], IsField, IsCalculated):

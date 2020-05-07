@@ -6,13 +6,13 @@ from typing import List
 import revert
 from orm import constraints
 from revert.orm import Entity
-from revert.orm.attributes import CalculatedField, CalculatedMultiRelation, Field, MultiRelation, ProtectedMultiRelation, ProtectedRelation, Relation
+from revert.orm.attributes import BackReference, BackReferences, CalculatedField, CalculatedMultiRelation, Field, MultiRelation, Relation, UnionRelation
 from revert.orm.constraints import Contributes, FormulaDependency, FullTextSearch, Index, OnChange, OneToOne, Reverse, SortedIndex, Unique
 
 
 class NoteStats(Entity):
     ctr = CalculatedField(float)
-    note = ProtectedRelation(lambda: BaseNote)
+    note = BackReference(lambda: BaseNote)
 
     views = Field(int)
     clicks = Field(int)
@@ -31,11 +31,11 @@ class NoteStats(Entity):
 
 
 class BaseNote(Entity, ABC):
-    children = ProtectedMultiRelation(lambda: BaseNote)
-    extracted = ProtectedMultiRelation(lambda: BaseNote)
-    parents = ProtectedMultiRelation(lambda: BaseNote)
-    shelves = ProtectedMultiRelation(lambda: Shelf)
-    stats = ProtectedRelation(lambda: NoteStats)
+    children = UnionRelation(lambda: BaseNote)
+    parents = UnionRelation(lambda: BaseNote)
+    extracted = BackReferences(lambda: BaseNote)
+    shelves = BackReferences(lambda: Shelf)
+    stats = BackReference(lambda: NoteStats)
     title = CalculatedField(str)
     searchable_text = CalculatedField(str)
 
@@ -84,8 +84,8 @@ class BaseNote(Entity, ABC):
 
 class MarkdownNote(BaseNote):
     references = CalculatedMultiRelation(lambda: BaseNote)
-    referenced_by = ProtectedMultiRelation(lambda: MarkdownNote)
-    tagged_by = ProtectedMultiRelation(lambda: MarkdownNote)
+    referenced_by = BackReferences(lambda: MarkdownNote)
+    tagged_by = BackReferences(lambda: MarkdownNote)
 
     content = Field(str)
     tags = MultiRelation(lambda: BaseNote)
