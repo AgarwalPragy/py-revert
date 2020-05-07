@@ -5,14 +5,14 @@ import os
 from collections import defaultdict
 from datetime import datetime
 from functools import wraps
-from typing import Callable, ClassVar, DefaultDict, List, Optional, Tuple, TypeVar
+from typing import Callable, ClassVar, DefaultDict, Dict, List, Optional, TypeVar
 from uuid import uuid4
 
 from intent import Intent
 
-from exceptions import AmbiguousRedoError, InTransactionError, NoTransactionActiveError
-from trie import TrieDict
 from . import config
+from .exceptions import AmbiguousRedoError, InTransactionError, NoTransactionActiveError
+from .trie import TrieDict
 
 TCallable = TypeVar('TCallable', bound=Callable)
 
@@ -144,13 +144,19 @@ class Transaction:
         tr.dirty[key] = value
 
     @staticmethod
-    def delete(key: str, ignore_if_not_present: bool = False) -> None:
+    def discard(key: str) -> bool:
         if not Transaction.transaction_stack:
             raise NoTransactionActiveError('Cannot delete database values outside a transaction')
         if Transaction.has(key):
             Transaction.transaction_stack[-1].deleted[key] = ''
             Transaction.transaction_stack[-1].discard(key)
-        elif not ignore_if_not_present:
+            return True
+        else:
+            return False
+
+    @staticmethod
+    def delete(key: str) -> None:
+        if not Transaction.discard(key):
             raise KeyError(key)
 
     @classmethod
@@ -165,16 +171,16 @@ class Transaction:
         return list(keys)
 
     @classmethod
-    def match_items(cls, pattern: str) -> List[Tuple[str, str]]:
+    def match_items(cls, pattern: str) -> Dict[str, str]:
         items = {key: value for key, value in data.items(pattern)}
         transaction: Transaction
         for transaction in Transaction.transaction_stack:
             for key, value in transaction.dirty.items(pattern):
                 items[key] = value
-            for key in transaction.deleted.items(pattern):
+            for key in transaction.deleted.keys(pattern):
                 if key in items:
                     del items[key]
-        return list(items)
+        return items
 
     @classmethod
     def match_count(cls, pattern: str) -> int:
@@ -188,12 +194,12 @@ class Transaction:
         self.ignore_if_no_change = ignore_if_no_change
 
     def __call__(self, func: TCallable) -> TCallable:
-        @wraps
+        @wraps(func)
         def wrapped(*args, **kwargs):
             with Transaction(message=self.message, rollback_on_error=self.rollback_on_error, ignore_if_no_change=self.ignore_if_no_change):
                 func(*args, **kwargs)
 
-        return wrapped
+        return wrapped  # type: ignore
 
     def __enter__(self):
         self.dirty = TrieDict()
@@ -217,12 +223,14 @@ class Transaction:
         if not Transaction.transaction_stack:
             return
         transaction = Transaction.transaction_stack[-1]
-        transaction.dirty = {}
+        transaction.dirty = TrieDict()
+        transaction.deleted = TrieDict()
 
     @staticmethod
     def rollback_all() -> None:
         for transaction in Transaction.transaction_stack:
-            transaction.dirty = {}
+            transaction.dirty = TrieDict()
+            transaction.deleted = TrieDict()
         Transaction.messages = []
 
 

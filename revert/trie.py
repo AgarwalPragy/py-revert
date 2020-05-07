@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Generator, Iterator, List, Mapping, Optional, Tuple, Union
 
-import config
+from . import config
 
 
 def split_first(key: str) -> Tuple[str, str]:
@@ -13,7 +13,7 @@ def split_first(key: str) -> Tuple[str, str]:
         return key[:index], key[index + 1:]
 
 
-class TrieDict(Mapping[str, str]):
+class TrieDict:
     _children: Dict[str, TrieDict]
     _value: Optional[str] = None
     _count: int = 0
@@ -167,10 +167,10 @@ class TrieDict(Mapping[str, str]):
             trie._children = {}
         else:
             if len(data) == 3:
-                trie._value, trie._count, children = data
+                trie._value, trie._count, children = data  # type: ignore
             else:
                 trie._value = None
-                trie._count, children = data
+                trie._count, children = data  # type: ignore
             for key, value in children.items():
                 trie._children[key] = TrieDict.from_json(value)
         return trie

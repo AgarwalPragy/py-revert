@@ -76,7 +76,7 @@ class BaseSet(Generic[TValue]):
 
         If the element is not a member, do nothing.
         """
-        Transaction.delete(f'{self.__binding__}/items/{orm.get_repr(item)}', ignore_if_not_present=True)
+        Transaction.discard(f'{self.__binding__}/items/{orm.get_repr(item)}')
 
     def copy(self) -> tSet[TValue]:
         return set(self)
