@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Iterable, List, Type, TypeVar
 
 from revert import Transaction
+from . import attributes
 
 __all__ = ['Entity', 'UID']
 
@@ -67,10 +68,9 @@ class Entity(ABC):
         for attr_name in dir(cls):
             try:
                 attr = getattr(cls, attr_name)
-                if isinstance(attr, attributes.Descriptor):
+                if isinstance(attr, attributes.base.Base):
                     if attr._owner_class != cls:
                         copy = clone(attr)
-                        copy._owner_class = cls
                         setattr(cls, attr_name, copy)
             except Exception:
                 pass
@@ -119,4 +119,5 @@ class Entity(ABC):
         return []
 
 
-from . import orm, constraints, attributes
+from . import orm
+from . import constraints

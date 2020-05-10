@@ -1,0 +1,40 @@
+from __future__ import annotations
+
+from typing import Generic, Any, Callable, Generic, Literal, Optional, Type, TypeVar, Union, overload
+
+from revert import Transaction
+from .base import Base, Converter, IsCalculated, IsField, IsMulti, TPrimitive, T, TValue, TEntity, IsUnion, IsSingle, IsProtected, IsRelation, With
+from ..collections import ProtectedSet, Set
+from ..entity import Entity
+
+__all__ = ['']
+
+
+class ProtectedMultiField(Generic[TPrimitive], Base[ProtectedSet[TPrimitive]], IsField, IsMulti, IsProtected):
+    converter: Converter
+
+    def __init__(self, converter: Converter):
+        self.converter = converter
+
+    def _get_value(self, instance: Entity) -> ProtectedSet[TPrimitive]:
+        return ProtectedSet(__instance__=instance, __attr_name__=self._attr_name)
+
+class ProtectedRelation(Generic[TEntity], Base[TEntity], IsRelation, IsProtected):
+    def __init__(self, with_: With):
+        pass
+
+    def _get_value(self, instance: Entity) -> TEntity:
+        return orm.get_value(Transaction.get(orm.get_binding(instance, self._attr_name)))
+
+
+
+
+class ProtectedMultiRelation(Generic[TEntity], Base[ProtectedSet[TEntity]], IsRelation, IsMulti, IsProtected):
+    def __init__(self, with_: With):
+        pass
+
+    def _get_value(self, instance: Entity) -> ProtectedSet[TEntity]:
+        return ProtectedSet(__instance__=instance, __attr_name__=self._attr_name)
+
+
+from orm import orm

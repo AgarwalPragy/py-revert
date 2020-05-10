@@ -4,10 +4,9 @@ from abc import ABC, abstractmethod
 from typing import List
 
 import revert
-from orm import constraints
 from revert.orm import Entity
 from revert.orm.attributes import BackReference, BackReferences, CalculatedField, CalculatedMultiRelation, Field, MultiRelation, Relation, UnionRelation
-from revert.orm.constraints import Contributes, FormulaDependency, FullTextSearch, Index, OnChange, OneToOne, Reverse, SortedIndex, Unique
+from revert.orm.constraints import Constraint, Contributes, FormulaDependency, FullTextSearch, Index, OnChange, OneToOne, Reverse, SortedIndex, Unique
 
 
 class NoteStats(Entity):
@@ -22,7 +21,7 @@ class NoteStats(Entity):
         return self.clicks / (self.views + 1.0)
 
     @classmethod
-    def attribute_constraints(cls) -> List[constraints.Constraint]:
+    def attribute_constraints(cls) -> List[Constraint]:
         return super().attribute_constraints() + [
             SortedIndex(cls.ctr),
             FormulaDependency(cls.ctr, dependency=cls.clicks),
@@ -68,7 +67,7 @@ class BaseNote(Entity, ABC):
         ...
 
     @classmethod
-    def attribute_constraints(cls) -> List[constraints.Constraint]:
+    def attribute_constraints(cls) -> List[Constraint]:
         return super().attribute_constraints() + [
             OneToOne(NoteStats.note, cls.stats),
             Index(cls.access_level),
@@ -101,7 +100,7 @@ class MarkdownNote(BaseNote):
         return [stripped for line in self.content.split('\n') if (stripped := line.strip())][0]
 
     @classmethod
-    def attribute_constraints(cls) -> List[constraints.Constraint]:
+    def attribute_constraints(cls) -> List[Constraint]:
         return super().attribute_constraints() + [
             FormulaDependency(cls.searchable_text, dependency=cls.content),
             FormulaDependency(cls.title, dependency=cls.content),
@@ -128,7 +127,7 @@ class VocabNote(BaseNote):
         return f'{self.word} (Vocab)'
 
     @classmethod
-    def attribute_constraints(cls) -> List[constraints.Constraint]:
+    def attribute_constraints(cls) -> List[Constraint]:
         return super().attribute_constraints() + [
             FormulaDependency(cls.searchable_text, dependency=cls.word),
             FormulaDependency(cls.searchable_text, dependency=cls.meaning),
@@ -156,7 +155,7 @@ class ResourceNote(BaseNote, ABC):
         ...
 
     @classmethod
-    def attribute_constraints(cls) -> List[constraints.Constraint]:
+    def attribute_constraints(cls) -> List[Constraint]:
         return super().attribute_constraints() + [
             FormulaDependency(cls.searchable_text, dependency=cls.url),
             FormulaDependency(cls.searchable_text, dependency=cls.metadata),
@@ -175,7 +174,7 @@ class DefaultResourceNote(ResourceNote):
         return self.metadata
 
     @classmethod
-    def attribute_constraints(cls) -> List[constraints.Constraint]:
+    def attribute_constraints(cls) -> List[Constraint]:
         return super().attribute_constraints() + [
             FormulaDependency(cls.title, dependency=cls.metadata),
         ]
@@ -197,7 +196,7 @@ class YoutubeVRN(VideoRN):
         return self.video_title
 
     @classmethod
-    def attribute_constraints(cls) -> List[constraints.Constraint]:
+    def attribute_constraints(cls) -> List[Constraint]:
         return super().attribute_constraints() + [
             FormulaDependency(cls.searchable_text, dependency=cls.captions),
             FormulaDependency(cls.searchable_text, dependency=cls.description),
@@ -223,7 +222,7 @@ class StackOverflowRN(ResourceNote):
         return self.question_title
 
     @classmethod
-    def attribute_constraints(cls) -> List[constraints.Constraint]:
+    def attribute_constraints(cls) -> List[Constraint]:
         return super().attribute_constraints() + [
             FormulaDependency(cls.searchable_text, dependency=cls.question_title),
             FormulaDependency(cls.searchable_text, dependency=cls.question),
@@ -250,7 +249,7 @@ class Shelf(Entity):
         self.name = name
 
     @classmethod
-    def attribute_constraints(cls) -> List[constraints.Constraint]:
+    def attribute_constraints(cls) -> List[Constraint]:
         return super().attribute_constraints() + [
             Reverse(Shelf.notes, BaseNote.shelves),
             Unique(Shelf.name),

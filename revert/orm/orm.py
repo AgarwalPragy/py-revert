@@ -6,10 +6,10 @@ from typing import Any, Dict, List, Type, Union, cast
 
 from intent import Intent
 
-from exceptions import *
 from revert import Transaction, intent_db_connected
 from . import config
 from .entity import Entity, UID
+from .exceptions import ClassAlreadyRegisteredError, UnsavableObjectError
 
 __all__ = []
 
