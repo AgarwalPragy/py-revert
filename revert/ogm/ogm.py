@@ -47,7 +47,7 @@ def register_edge_class(cls: Type[Edge]) -> None:
 
 def register_node(obj: Node) -> None:
     class_reference = obj.__class__.class_reference()
-    uid = uuid.uuid4()
+    uid = str(uuid.uuid4())
     object.__setattr__(obj, '__uid__', uid)
     object.__setattr__(obj, '__class_reference__', class_reference)
     for cls in obj.__class__.mro():

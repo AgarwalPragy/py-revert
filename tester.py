@@ -3,7 +3,9 @@ from __future__ import annotations
 from abc import ABC
 from typing import Set, TypeVar
 
-from revert.graph import DirectedEdge, Field, Node, ProtectedSet, SetField, UndirectedEdge
+import revert
+from revert import Transaction
+from revert.ogm import ClassDictField, Dict, DirectedEdge, Field, Node, ProtectedSet, SetField, UndirectedEdge
 
 T = TypeVar('T')
 
@@ -92,17 +94,30 @@ class Note(Node, ABC):
         self.shelves.add(shelf)
         shelf.notes.add(self)
 
+
 class Shelf(Node):
+    shelf_names: Dict[str, Shelf] = ClassDictField()
     votes: int = Field()
-    _name: str = UniqueField()
+    _name: str = Field()
     notes: Set[Note] = SetField()
 
     def __init__(self, name: str) -> None:
-        self._name = name
+        self._name = ''
+        self.name = name
 
     @property
     def name(self) -> str:
         return self._name
+
+    @name.setter
+    def name(self, value: str) -> None:
+        if value == self._name:
+            return
+        if value in Shelf.shelf_names:
+            raise Exception('Duplicate name')
+        del Shelf.shelf_names[self._name]
+        Shelf.shelf_names[value] = self
+        self._name = value
 
     def add_note(self, note: Note) -> None:
         self.notes.add(note)
@@ -199,8 +214,9 @@ class VocabNote(Note):
 
 
 class ResourceNote(Note, ABC):
+    urls: Dict[str, ResourceNote] = ClassDictField()
     _mime: str = Field()
-    _url: str = UniqueField()  # todo: enforce by attaching attribs to class and using that class data to check for uniqueness
+    _url: str = Field()  # todo: enforce by attaching attribs to class and using that class data to check for uniqueness
     # todo: add index on url
     _metadata: str = Field()
 
@@ -248,3 +264,9 @@ class YoutubeVRN(VideoRN):
     def video_title(self, value: str) -> None:
         self._title = value
         # set searchable text here
+
+
+if __name__ == '__main__':
+    revert.connect('db')
+    with Transaction():
+        x = Note()

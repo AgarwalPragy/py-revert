@@ -160,7 +160,7 @@ data: Dict
 
 def __getattr__(name: str):
     if name == 'data':
-        return Dict()
+        return Dict(__binding__='')
 
 
 from . import ogm

@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any, Dict as tDict, Generic, Iterable, List, Set as tSet, Tuple, TypeVar
 
 from revert import Transaction
-from . import ogm
 
 __all__ = ['Set', 'ProtectedSet', 'Dict', 'ProtectedDict']
 
@@ -72,7 +71,7 @@ class ProtectedSet(BaseSet[TVal], Generic[TVal]):
     pass
 
 
-class BaseDict(Generic[TKey, TVal], Generic[TKey, TVal]):
+class BaseDict(Generic[TKey, TVal]):
     __binding__: str
 
     def __init__(self, **kwargs) -> None:
@@ -148,3 +147,6 @@ class Dict(BaseDict[TKey, TVal]):
 
 class ProtectedDict(BaseDict[TKey, TVal]):
     pass
+
+
+from . import ogm
