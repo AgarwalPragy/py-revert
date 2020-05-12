@@ -1,56 +1,65 @@
 from __future__ import annotations
 
 # noinspection PyUnresolvedReferences
-from datetime import datetime
-from typing import Any, Dict, List, Type, Union, cast
+import uuid
+from typing import Any, Dict, Type, cast
 
 from intent import Intent
 
 from revert import Transaction, intent_db_connected
 from . import config
-from .entity import Entity, UID
 from .exceptions import ClassAlreadyRegisteredError, UnsavableObjectError
+from .graph import Edge, Node
 
 __all__ = []
 
-classes: Dict[str, Type[Entity]] = {}
-object_cache: Dict[UID, Entity] = {}
+node_classes: Dict[str, Type[Node]] = {}
+edge_classes: Dict[str, Type[Edge]] = {}
+node_cache: Dict[str, Node] = {}
 
-intent_class_registered: Intent[Type[Entity]] = Intent()
-intent_entity_created: Intent[Entity] = Intent()
-intent_entity_before_delete: Intent[Entity] = Intent()
+intent_class_registered: Intent[Type[Node]] = Intent()
+intent_entity_created: Intent[Node] = Intent()
+intent_entity_before_delete: Intent[Node] = Intent()
 
 
 def db_connected(directory: str) -> None:
     with Transaction(message='schema change'):
-        for cls in classes.values():
-            mro = ','.join([parent.class_reference() for parent in cls.mro() if issubclass(parent, Entity)])
+        for cls in node_classes.values():
+            mro = ','.join([parent.class_reference() for parent in cls.mro() if issubclass(parent, Node)])
             Transaction.set(f'{config.base}/classes/{cls.class_reference()}/mro', mro)
 
 
-def register_class(cls: Type[Entity]) -> None:
+def register_node_class(cls: Type[Node]) -> None:
     class_reference = cls.class_reference()
-    if class_reference in classes:
+    if class_reference in node_classes:
         raise ClassAlreadyRegisteredError(f'class with reference: {class_reference} has already been registered')
-    classes[class_reference] = cls
+    node_classes[class_reference] = cls
     intent_class_registered.announce(cls)
 
 
-def register_object(obj: Entity) -> None:
+def register_edge_class(cls: Type[Edge]) -> None:
+    class_reference = cls.class_reference()
+    if class_reference in edge_classes:
+        raise ClassAlreadyRegisteredError(f'class with reference: {class_reference} has already been registered')
+    edge_classes[class_reference] = cls
+    intent_class_registered.announce(cls)
+
+
+def register_node(obj: Node) -> None:
     class_reference = obj.__class__.class_reference()
-    uid = UID()
+    uid = uuid.uuid4()
     object.__setattr__(obj, '__uid__', uid)
     object.__setattr__(obj, '__class_reference__', class_reference)
     for cls in obj.__class__.mro():
-        if issubclass(cls, Entity):
+        if issubclass(cls, Node):
             Transaction.set(f'{config.base}/classes/{cls.class_reference()}/objects/{uid}', '')
     Transaction.set(f'{config.base}/objects/{uid}/class_reference', class_reference)
     Transaction.set(f'{config.base}/objects/{uid}/uid', str(uid))
-    object_cache[uid] = obj
+    node_cache[uid] = obj
     intent_entity_created.announce(obj)
 
 
-def delete_object(obj: Entity) -> None:
+def delete_node(obj: Node) -> None:
     intent_entity_before_delete.announce(obj)
     uid = object.__getattribute__(obj, '__uid__')
     class_reference = object.__getattribute__(obj, '__class_reference__')
@@ -59,33 +68,27 @@ def delete_object(obj: Entity) -> None:
     Transaction.delete(f'{config.base}/classes/{class_reference}/objects/{uid}')
 
 
-def get_binding(obj: Entity, attr: str) -> str:
+def get_binding(obj: Node, attr: str) -> str:
     uid = object.__getattribute__(obj, '__uid__')
     return f'{config.base}/objects/{uid}/attrs/{attr}'
 
 
-def get_all_attrs(obj: Entity) -> List[str]:
-    uid = object.__getattribute__(obj, '__uid__')
-    trim_length = len(f'{config.base}/objects/{uid}/attrs/')
-    return [key[trim_length:].split('/')[0] for key in Transaction.match_keys(f'{config.base}/objects/{uid}/attrs/')]
-
-
-def get_instance(uid: Union[str, UID]) -> Entity:
-    if isinstance(uid, str):
-        uid = UID(val=uid)
-    if uid in object_cache:
-        return object_cache[uid]
+def get_node(uid: str) -> Node:
+    if uid in node_cache:
+        return node_cache[uid]
     class_reference = Transaction.get(f'{config.base}/objects/{uid}/class_reference')
-    cls = classes.get(class_reference, Entity)
-    obj = cast(Entity, object.__new__(cls))
+    cls = node_classes.get(class_reference, Node)
+    obj = cast(Node, object.__new__(cls))
     object.__setattr__(obj, '__uid__', uid)
     object.__setattr__(obj, '__class_reference__', class_reference)
     return obj
 
 
-def get_repr(item: Any) -> str:
-    if isinstance(item, Entity):
+def encode(item: Any) -> str:
+    if isinstance(item, Node):
         return f'get_instance(\'{object.__getattribute__(item, "__uid__")}\')'
+    elif issubclass(item, Node):
+        return f'classes[\'{item.class_reference()}\']'
     else:
         repr_ = repr(item)
         if repr_.strip().startswith('<'):
@@ -93,7 +96,7 @@ def get_repr(item: Any) -> str:
         return repr_
 
 
-def get_value(repr_: str) -> Any:
+def decode(repr_: str) -> Any:
     return eval(repr_)
 
 

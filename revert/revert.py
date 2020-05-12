@@ -108,6 +108,23 @@ class Transaction:
         Transaction.messages = []
 
     @staticmethod
+    def count_up_or_set(key: str) -> None:
+        value = int(Transaction.get(key, safe=True))
+        if value is None:
+            value = 0
+        value += 1
+        Transaction.set(key, str(value))
+
+    @staticmethod
+    def count_down_or_del(key: str) -> None:
+        value = int(Transaction.get(key))
+        value -= 1
+        if value > 0:
+            Transaction.set(key, str(value))
+        else:
+            Transaction.delete(key)
+
+    @staticmethod
     def get(key: str, safe: bool = False) -> Optional[str]:
         for transaction in Transaction.transaction_stack[::-1]:
             value = transaction.deleted.get(key)

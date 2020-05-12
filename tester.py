@@ -1,183 +1,235 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import List
+from abc import ABC
+from typing import Set, TypeVar
 
-import revert
-from revert.orm import Entity
-from revert.orm.attributes import BackReference, BackReferences, CalculatedField, CalculatedMultiRelation, Field, MultiRelation, Relation, UnionRelation
-from revert.orm.constraints import Constraint, Contributes, FormulaDependency, FullTextSearch, Index, OnChange, OneToOne, Reverse, SortedIndex, Unique
+from revert.graph import DirectedEdge, Field, Node, ProtectedSet, SetField, UndirectedEdge
 
-
-class NoteStats(Entity):
-    ctr = CalculatedField(float)
-    note = BackReference(lambda: BaseNote)
-
-    views = Field(int)
-    clicks = Field(int)
-    votes = Field(int)
-
-    def _formula_ctr(self) -> float:
-        return self.clicks / (self.views + 1.0)
-
-    @classmethod
-    def attribute_constraints(cls) -> List[Constraint]:
-        return super().attribute_constraints() + [
-            SortedIndex(cls.ctr),
-            FormulaDependency(cls.ctr, dependency=cls.clicks),
-            FormulaDependency(cls.ctr, dependency=cls.views),
-        ]
+T = TypeVar('T')
 
 
-class BaseNote(Entity, ABC):
-    children = UnionRelation(lambda: BaseNote)
-    parents = UnionRelation(lambda: BaseNote)
-    extracted = BackReferences(lambda: BaseNote)
-    shelves = BackReferences(lambda: Shelf)
-    stats = BackReference(lambda: NoteStats)
-    title = CalculatedField(str)
-    searchable_text = CalculatedField(str)
+class TF_IDF:
+    pass
 
-    access_level = Field(str)
-    source = Relation(lambda: BaseNote)
 
-    def __init__(self, access_level: str = 'default'):
-        pass
-        # Shelf.get(name='orphans').notes.add(self)
+class NoteStats(Node):
+    _ctr: float = Field()  # add sorted index using classvar
+    _note: Note = Field()
 
-    def check_orphan(self):
-        if not self.parents:
-            Shelf.get(name='orphans').notes.add(self)
-        else:
-            Shelf.get(name='orphans').notes.discard(self)
+    _views: int = Field()
+    _clicks: int = Field()
+    votes: int = Field()
 
-    def delete(self, force=False):
-        # todo: check if note is open
-        if not force:
-            raise Exception('Editor is open')
-        Shelf.get(name='orphans').notes.discard(self)
+    def __init__(self, note: Note) -> None:
+        self._note = note
+
+    @property
+    def note(self) -> Note:
+        return self._note
+
+    @property
+    def views(self) -> int:
+        return self._views
+
+    @views.setter
+    def views(self, value: int) -> None:
+        self._views = value
+        self._recalculate_ctr()
+
+    @property
+    def clicks(self) -> int:
+        return self._clicks
+
+    @clicks.setter
+    def clicks(self, value: int) -> None:
+        self._clicks = value
+        self._recalculate_ctr()
+
+    def _recalculate_ctr(self) -> None:
+        self._ctr = self.clicks / (self.views + 1.0)
+
+
+class Note(Node, ABC):
+    _stats: NoteStats = Field()
+    access_level: str = Field()
+    shelves: Set[Shelf] = SetField()  # todo: should this be a set or an edge?
+
+    _search_index: TF_IDF = Field()
+    _title: str = Field()
+
+    def __init__(self):
+        self._stats = NoteStats(self)
+
+    def delete(self):
+        for edge in list(self.edges()):
+            edge.delete()
+        self._stats.delete()
+        for shelf in self.shelves:
+            shelf.notes.discard(self)
         super().delete()
 
-    @abstractmethod
-    def _formula_searchable_text(self, trigger: str) -> str:
-        ...
+    @property
+    def stats(self) -> NoteStats:
+        return self._stats
 
-    @abstractmethod
-    def _formula_title(self, trigger: str) -> str:
-        ...
+    @property
+    def sources(self) -> ProtectedSet[Note]:
+        return self._parent_relations(Source)
 
-    @classmethod
-    def attribute_constraints(cls) -> List[Constraint]:
-        return super().attribute_constraints() + [
-            OneToOne(NoteStats.note, cls.stats),
-            Index(cls.access_level),
-            FullTextSearch(cls.searchable_text),
-            FullTextSearch(cls.title),
-            Reverse(cls.extracted, cls.source),
-            Reverse(cls.parents, cls.children),
-            OnChange(cls.parents, trigger=cls.check_orphan),
-            Contributes(cls.source, to=cls.parents),
-            Contributes(cls.extracted, to=cls.children),
-        ]
+    @property
+    def extracted(self) -> Set[Note]:
+        return self._child_relations(Source)
 
+    @property
+    def title(self) -> str:
+        return self._title
 
-class MarkdownNote(BaseNote):
-    references = CalculatedMultiRelation(lambda: BaseNote)
-    referenced_by = BackReferences(lambda: MarkdownNote)
-    tagged_by = BackReferences(lambda: MarkdownNote)
+    @property
+    def search_index(self) -> TF_IDF:
+        return self._search_index
 
-    content = Field(str)
-    tags = MultiRelation(lambda: BaseNote)
+    def add_to_shelf(self, shelf: Shelf) -> None:
+        self.shelves.add(shelf)
+        shelf.notes.add(self)
 
-    def _formula_references(self) -> List[BaseNote]:
-        print(self)
-        return []
+class Shelf(Node):
+    votes: int = Field()
+    _name: str = UniqueField()
+    notes: Set[Note] = SetField()
 
-    def _formula_searchable_text(self, trigger: str) -> str:
-        return self.content
+    def __init__(self, name: str) -> None:
+        self._name = name
 
-    def _formula_title(self, trigger: str) -> str:
-        return [stripped for line in self.content.split('\n') if (stripped := line.strip())][0]
+    @property
+    def name(self) -> str:
+        return self._name
 
-    @classmethod
-    def attribute_constraints(cls) -> List[Constraint]:
-        return super().attribute_constraints() + [
-            FormulaDependency(cls.searchable_text, dependency=cls.content),
-            FormulaDependency(cls.title, dependency=cls.content),
-            FormulaDependency(cls.references, dependency=cls.content),
-            Reverse(cls.references, cls.referenced_by),
-            Reverse(cls.tags, cls.tagged_by),
-            Contributes(cls.references, to=cls.children),
-            Contributes(cls.referenced_by, to=cls.parents),
-            Contributes(cls.tags, to=cls.parents),
-            Contributes(cls.tagged_by, to=cls.children),
-        ]
+    def add_note(self, note: Note) -> None:
+        self.notes.add(note)
+        note.shelves.add(self)
+
+    def delete(self):
+        for note in self.notes:
+            note.shelves.discard(self)
 
 
-class VocabNote(BaseNote):
-    word = Field(str)
-    meaning = Field(str)
-    synonyms = MultiRelation(lambda: BaseNote)
-    antonyms = MultiRelation(lambda: BaseNote)
-
-    def _formula_searchable_text(self, trigger: str) -> str:
-        return self.word + self.meaning
-
-    def _formula_title(self, trigger: str) -> str:
-        return f'{self.word} (Vocab)'
-
-    @classmethod
-    def attribute_constraints(cls) -> List[Constraint]:
-        return super().attribute_constraints() + [
-            FormulaDependency(cls.searchable_text, dependency=cls.word),
-            FormulaDependency(cls.searchable_text, dependency=cls.meaning),
-            FormulaDependency(cls.title, dependency=cls.word),
-            Reverse(cls.synonyms, cls.synonyms),
-            Reverse(cls.antonyms, cls.antonyms),
-            Contributes(cls.synonyms, to=cls.parents),
-            Contributes(cls.synonyms, to=cls.children),
-            Contributes(cls.antonyms, to=cls.parents),
-            Contributes(cls.antonyms, to=cls.children),
-        ]
+class Source(DirectedEdge):
+    def __init__(self, note: Note, source: Note) -> None:
+        super().__init__(parent=source, child=note)
 
 
-class ResourceNote(BaseNote, ABC):
-    mime = Field(str)
-    url = Field(str)
-    metadata = Field(str)
-
-    @abstractmethod
-    def _formula_searchable_text(self, trigger: str) -> str:
-        ...
-
-    @abstractmethod
-    def _formula_title(self, trigger: str) -> str:
-        ...
-
-    @classmethod
-    def attribute_constraints(cls) -> List[Constraint]:
-        return super().attribute_constraints() + [
-            FormulaDependency(cls.searchable_text, dependency=cls.url),
-            FormulaDependency(cls.searchable_text, dependency=cls.metadata),
-            FormulaDependency(cls.title, dependency=cls.metadata),
-            Index(cls.mime),
-            Index(cls.url),
-            Unique(cls.url),
-        ]
+class Reference(DirectedEdge):
+    def __init__(self, note: Note, reference: Note) -> None:
+        super().__init__(parent=note, child=reference)
 
 
-class DefaultResourceNote(ResourceNote):
-    def _formula_searchable_text(self, trigger: str) -> str:
-        return self.url + self.metadata
+class Tag(DirectedEdge):
+    def __init__(self, note: Note, tag: Note) -> None:
+        super().__init__(parent=tag, child=note)
 
-    def _formula_title(self, trigger: str) -> str:
-        return self.metadata
 
-    @classmethod
-    def attribute_constraints(cls) -> List[Constraint]:
-        return super().attribute_constraints() + [
-            FormulaDependency(cls.title, dependency=cls.metadata),
-        ]
+class MarkdownNote(Note):
+    _content: str = Field()
+
+    @property
+    def references(self):
+        return self._child_relations(Reference)
+
+    @property
+    def referenced_by(self):
+        return self._parent_relations(Reference)
+
+    @property
+    def tags(self):
+        return self._parent_relations(Tag)
+
+    @property
+    def tagged_by(self):
+        return self._child_relations(Tag)
+
+    @property
+    def content(self) -> str:
+        return self._content
+
+    @content.setter
+    def content(self, value: str) -> None:
+        self._content = value
+        self._title = [stripped for line in value.split('\n') if (stripped := line.strip())][0]
+        # todo: extract references & searchable text
+
+
+class Synonym(UndirectedEdge):
+    ...
+
+
+class Antonym(UndirectedEdge):
+    ...
+
+
+class VocabNote(Note):
+    _word: str = Field()
+    _meaning: str = Field()
+
+    @property
+    def word(self) -> str:
+        return self._word
+
+    @word.setter
+    def word(self, value: str) -> None:
+        self._word = value
+        self._title = f'{value} (Vocab)'
+        # set searchable text
+
+    @property
+    def meaning(self) -> str:
+        return self._meaning
+
+    @meaning.setter
+    def meaning(self, value: str) -> None:
+        self._meaning = value
+        # set searchable text
+
+    @property
+    def synonyms(self):
+        return self._parent_relations(Synonym)
+
+    @property
+    def antonyms(self):
+        return self._parent_relations(Antonym)
+
+
+class ResourceNote(Note, ABC):
+    _mime: str = Field()
+    _url: str = UniqueField()  # todo: enforce by attaching attribs to class and using that class data to check for uniqueness
+    # todo: add index on url
+    _metadata: str = Field()
+
+    @property
+    def mime(self) -> str:
+        return self._mime
+
+    @mime.setter
+    def mime(self, value: str) -> None:
+        self._mime = value
+        # set searchable text
+
+    @property
+    def url(self) -> str:
+        return self._url
+
+    @url.setter
+    def url(self, value: str) -> None:
+        self._url = value
+        # set searchable text
+
+    @property
+    def metadata(self) -> str:
+        return self._metadata
+
+    @metadata.setter
+    def metadata(self, value: str) -> None:
+        self._metadata = value
+        # set searchable text
 
 
 class VideoRN(ResourceNote, ABC):
@@ -185,88 +237,14 @@ class VideoRN(ResourceNote, ABC):
 
 
 class YoutubeVRN(VideoRN):
-    captions = Field(str)
-    description = Field(str)
-    video_title = Field(str)
+    _captions: str = Field()
+    _description: str = Field()
 
-    def _formula_searchable_text(self, trigger: str) -> str:
-        return self.url + self.metadata + self.captions + self.description + self.video_title
+    @property
+    def video_title(self) -> str:
+        return self._title
 
-    def _formula_title(self, trigger: str) -> str:
-        return self.video_title
-
-    @classmethod
-    def attribute_constraints(cls) -> List[Constraint]:
-        return super().attribute_constraints() + [
-            FormulaDependency(cls.searchable_text, dependency=cls.captions),
-            FormulaDependency(cls.searchable_text, dependency=cls.description),
-            FormulaDependency(cls.searchable_text, dependency=cls.video_title),
-            FormulaDependency(cls.title, dependency=cls.video_title),
-        ]
-
-
-class WikipediaRN(ResourceNote):
-    pass
-
-
-class StackOverflowRN(ResourceNote):
-    question_title = Field(str)
-    question = Field(str)
-    selected_answer = Field(str)
-    other_top_answer = Field(str)
-
-    def _formula_searchable_text(self, trigger: str) -> str:
-        return self.question_title + self.question + self.selected_answer + self.other_top_answer + self.metadata + self.url
-
-    def _formula_title(self, trigger: str) -> str:
-        return self.question_title
-
-    @classmethod
-    def attribute_constraints(cls) -> List[Constraint]:
-        return super().attribute_constraints() + [
-            FormulaDependency(cls.searchable_text, dependency=cls.question_title),
-            FormulaDependency(cls.searchable_text, dependency=cls.question),
-            FormulaDependency(cls.searchable_text, dependency=cls.selected_answer),
-            FormulaDependency(cls.searchable_text, dependency=cls.other_top_answer),
-            FormulaDependency(cls.title, dependency=cls.question_title),
-        ]
-
-
-class ImageRN(ResourceNote):
-    pass
-
-
-class FileRN(ResourceNote):
-    pass
-
-
-class Shelf(Entity):
-    votes = Field(int)
-    name = Field(str)
-    notes = MultiRelation(lambda: BaseNote)
-
-    def __init__(self, name: str) -> None:
-        self.name = name
-
-    @classmethod
-    def attribute_constraints(cls) -> List[Constraint]:
-        return super().attribute_constraints() + [
-            Reverse(Shelf.notes, BaseNote.shelves),
-            Unique(Shelf.name),
-            Index(Shelf.name),
-        ]
-
-
-if __name__ == '__main__':
-    revert.connect('db/')
-    with revert.Transaction():
-        orphans = Shelf('orphans')
-        python = MarkdownNote()
-        python.content = 'Python Programming Language'
-        programming = MarkdownNote()
-        programming.content = 'Programming'
-        python.tags.add(programming)
-    print(list(python.tags)[0].content)
-    revert.undo()
-    print('after undo')
-    print(list(python.tags)[0].content)
+    @video_title.setter
+    def video_title(self, value: str) -> None:
+        self._title = value
+        # set searchable text here
