@@ -11,8 +11,6 @@ from . import config
 from .exceptions import ClassAlreadyRegisteredError, UnsavableObjectError
 from .graph import Edge, Node
 
-__all__ = []
-
 node_classes: Dict[str, Type[Node]] = {}
 edge_classes: Dict[str, Type[Edge]] = {}
 node_cache: Dict[str, Node] = {}

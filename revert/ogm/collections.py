@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict as tDict, Generic, Iterable, List, Set as tSet, Tuple, TypeVar
+from typing import AbstractSet, Any, Dict as tDict, FrozenSet, Iterable, Iterator, List, Mapping, MutableMapping, MutableSet, Set as tSet, Tuple, TypeVar
 
 from revert import Transaction
 
@@ -10,7 +10,7 @@ TKey = TypeVar('TKey')
 TVal = TypeVar('TVal')
 
 
-class BaseSet(Generic[TVal]):
+class BaseSet(AbstractSet[TVal]):
     __binding__: str
 
     def __init__(self, **kwargs) -> None:
@@ -18,14 +18,14 @@ class BaseSet(Generic[TVal]):
             raise TypeError(f'Cannot instantiate of object of {self.__class__.__name__}')
         self.__binding__ = kwargs['__binding__']
 
-    def __iter__(self) -> Iterable[TVal]:
+    def __iter__(self) -> Iterator[TVal]:
         pattern = f'{self.__binding__}'
         start = len(pattern) + 1
         for key in Transaction.match_keys(pattern):
             value = ogm.decode(key[start:])
             yield value
 
-    def __contains__(self, item: TVal) -> bool:
+    def __contains__(self, item: Any) -> bool:
         """ x.__contains__(y) <==> y in x. """
         return Transaction.has(f'{self.__binding__}/{ogm.encode(item)}')
 
@@ -41,13 +41,13 @@ class BaseSet(Generic[TVal]):
             return True
         if isinstance(other, Set):
             return self.__binding__ == other.__binding__
-        return list(self) == other
+        return list(self) == list(other)
 
     def copy(self) -> tSet[TVal]:
         return set(self)
 
 
-class Set(BaseSet[TVal], Generic[TVal]):
+class Set(BaseSet[TVal], MutableSet[TVal]):
     def add(self, item: TVal) -> None:
         Transaction.set(f'{self.__binding__}/{ogm.encode(item)}', '')
 
@@ -67,11 +67,11 @@ class Set(BaseSet[TVal], Generic[TVal]):
                 self.add(item)
 
 
-class ProtectedSet(BaseSet[TVal], Generic[TVal]):
+class ProtectedSet(BaseSet[TVal], FrozenSet[TVal]):
     pass
 
 
-class BaseDict(Generic[TKey, TVal]):
+class BaseDict(Mapping[TKey, TVal]):
     __binding__: str
 
     def __init__(self, **kwargs) -> None:
@@ -79,7 +79,7 @@ class BaseDict(Generic[TKey, TVal]):
             raise TypeError(f'Cannot instantiate of object of {self.__class__.__name__}')
         self.__binding__ = kwargs['__binding__']
 
-    def keys(self) -> List[TKey]:
+    def keys(self) -> AbstractSet[TKey]:
         pattern = f'{self.__binding__}'
         start = len(pattern) + 1
         for key in Transaction.match_keys(pattern):
@@ -128,7 +128,7 @@ class BaseDict(Generic[TKey, TVal]):
         return {key: value for key, value in self.items()}
 
 
-class Dict(BaseDict[TKey, TVal]):
+class Dict(BaseDict[TKey, TVal], MutableMapping[TKey, TVal]):
     def __setitem__(self, key: TKey, value: TVal) -> None:
         Transaction.set(f'{self.__binding__}/{ogm.encode(key)}', ogm.encode(value))
 
@@ -145,7 +145,7 @@ class Dict(BaseDict[TKey, TVal]):
                 self[key] = value
 
 
-class ProtectedDict(BaseDict[TKey, TVal]):
+class ProtectedDict(BaseDict[TKey, TVal], Mapping[TKey, TVal]):
     pass
 
 

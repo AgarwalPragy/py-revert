@@ -13,6 +13,7 @@ T = TypeVar('T')
 TKey = TypeVar('TKey')
 TVal = TypeVar('TVal')
 TBase = TypeVar('TBase', bound='Base')
+TClassBase = TypeVar('TClassBase', bound='ClassBase')
 
 
 class Base(Generic[T], ABC):
@@ -50,14 +51,14 @@ class ClassBase(Generic[T], ABC):
         self._owner_class = owner
 
     @overload
-    def __get__(self: TBase, instance: Literal[None], owner: Type[Node]) -> TBase:
+    def __get__(self: TClassBase, instance: Literal[None], owner: Type[Node]) -> TClassBase:
         ...
 
     @overload
-    def __get__(self: TBase, instance: Node, owner: Type[Node]) -> T:
+    def __get__(self: TClassBase, instance: Node, owner: Type[Node]) -> T:
         ...
 
-    def __get__(self: TBase, instance: Optional[Node], owner: Type[Node]) -> Union[TBase, T]:
+    def __get__(self: TClassBase, instance: Optional[Node], owner: Type[Node]) -> Union[TClassBase, T]:
         if instance is None:
             return self
         return self._get_value(instance)

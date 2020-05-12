@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Optional, Type, TypeVar
+from typing import Any, Type, TypeVar
 
 from revert import Transaction
 from . import config
@@ -124,13 +124,13 @@ class Node(ABC):
     def _child_relations(self, edge_type: Type[Edge]) -> ProtectedSet[Node]:
         return ProtectedSet(__binding__=f'{config.base}/child_relations/{get_uid(self)}/{edge_type.class_reference()}/')
 
-    def edges(self, with_node: Optional[Node] = None, edge_type: Optional[Type[Edge]] = None) -> ProtectedSet[Edge]:
-        if edge_type is None:
-            edge_type = Edge
-        if with_node is None:
-            pass
-
-        return ProtectedSet(__binding__=f'{config.base}/edges/{get_uid(self)}/{get_uid(with_node)}/{edge_type.class_reference()}/')
+    # todo: fix this
+    # def edges(self, with_node: Optional[Node] = None, edge_type: Optional[Type[Edge]] = None) -> ProtectedSet[Edge]:
+    #     if edge_type is None:
+    #         edge_type = Edge
+    #     if with_node is None:
+    #         pass
+    #     return ProtectedSet(__binding__=f'{config.base}/edges/{get_uid(self)}/{get_uid(with_node)}/{edge_type.class_reference()}/')
 
     @classmethod
     def __init_subclass__(cls, **kwargs):

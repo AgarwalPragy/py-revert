@@ -109,15 +109,20 @@ class Transaction:
 
     @staticmethod
     def count_up_or_set(key: str) -> None:
-        value = int(Transaction.get(key, safe=True))
-        if value is None:
+        op_value = Transaction.safe_get(key)
+        if op_value is None:
             value = 0
+        else:
+            value = int(op_value)
         value += 1
         Transaction.set(key, str(value))
 
     @staticmethod
     def count_down_or_del(key: str) -> None:
-        value = int(Transaction.get(key))
+        op_value = Transaction.get(key)
+        if op_value is None:
+            raise KeyError(key)
+        value = int(op_value)
         value -= 1
         if value > 0:
             Transaction.set(key, str(value))
@@ -125,21 +130,32 @@ class Transaction:
             Transaction.delete(key)
 
     @staticmethod
-    def get(key: str, safe: bool = False) -> Optional[str]:
+    def safe_get(key: str) -> Optional[str]:
         for transaction in Transaction.transaction_stack[::-1]:
             value = transaction.deleted.get(key)
             if value is not None:
-                if not safe:
-                    raise KeyError(key)
                 return None
             value = transaction.dirty.get(key)
             if value is not None:
                 return value
         value = data.get(key)
         if value is None:
-            if not safe:
-                raise KeyError(key)
             return None
+        else:
+            return value
+
+    @staticmethod
+    def get(key: str) -> str:
+        for transaction in Transaction.transaction_stack[::-1]:
+            value = transaction.deleted.get(key)
+            if value is not None:
+                raise KeyError(key)
+            value = transaction.dirty.get(key)
+            if value is not None:
+                return value
+        value = data.get(key)
+        if value is None:
+            raise KeyError(key)
         else:
             return value
 
