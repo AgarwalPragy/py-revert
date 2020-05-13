@@ -162,7 +162,7 @@ class Transaction:
     @staticmethod
     def has(key: str) -> bool:
         for transaction in Transaction.transaction_stack[::-1]:
-            if key in Transaction.deleted:
+            if key in transaction.deleted:
                 return False
             if key in transaction.dirty:
                 return True

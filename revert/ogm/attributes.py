@@ -33,8 +33,8 @@ class Base(Generic[T], ABC):
         ...
 
     def __get__(self: TBase, instance: Optional[Node], owner: Type[Node]) -> Union[TBase, T]:
-        if instance is None:
-            return self
+        # if instance is None:
+        #     return self
         return self._get_value(instance)
 
     @abstractmethod
@@ -42,66 +42,47 @@ class Base(Generic[T], ABC):
         ...
 
 
-class ClassBase(Generic[T], ABC):
-    _attr_name: str
-    _owner_class: Type[Node]
+class ClassBase(Generic[T]):
+    _binding: str
 
     def __set_name__(self, owner: Type[Node], name: str) -> None:
-        self._attr_name = name
-        self._owner_class = owner
-
-    @overload
-    def __get__(self: TClassBase, instance: Literal[None], owner: Type[Node]) -> TClassBase:
-        ...
-
-    @overload
-    def __get__(self: TClassBase, instance: Node, owner: Type[Node]) -> T:
-        ...
-
-    def __get__(self: TClassBase, instance: Optional[Node], owner: Type[Node]) -> Union[TClassBase, T]:
-        if instance is None:
-            return self
-        return self._get_value(instance)
-
-    @abstractmethod
-    def _get_value(self, instance: Node) -> T:
-        ...
+        self._binding = ogm.get_class_binding(owner, name)
 
 
 class Field(Generic[TVal], Base[TVal]):
     def _get_value(self, instance: Node) -> TVal:
-        return ogm.decode(Transaction.get(ogm.get_binding(instance, self._attr_name)))
+        return ogm.decode(Transaction.get(ogm.get_node_binding(instance, self._attr_name)))
 
     def __set__(self, instance: Node, value: TVal) -> None:
-        Transaction.set(ogm.get_binding(instance, self._attr_name), ogm.encode(value))
+        Transaction.set(ogm.get_node_binding(instance, self._attr_name), ogm.encode(value))
 
 
 class ClassField(Generic[TVal], ClassBase[TVal]):
-    def _get_value(self, instance: Node) -> TVal:
-        return ogm.decode(Transaction.get(ogm.get_binding(instance, self._attr_name)))
+    def __get__(self: TClassBase, instance: Node, owner: Type[Node]) -> TVal:
+        return ogm.decode(Transaction.get(self._binding))
 
     def __set__(self, instance: Node, value: TVal) -> None:
-        Transaction.set(ogm.get_binding(instance, self._attr_name), ogm.encode(value))
+        Transaction.set(self._binding, ogm.encode(value))
 
 
 class SetField(Generic[TVal], Base[Set[TVal]]):
     def _get_value(self, instance: Node) -> Set[TVal]:
-        return Set(__binding__=ogm.get_binding(instance, self._attr_name))
+        return Set(__binding__=ogm.get_node_binding(instance, self._attr_name))
 
 
 class ClassSetField(Generic[TVal], ClassBase[Set[TVal]]):
-    def _get_value(self, instance: Node) -> Set[TVal]:
-        return Set(__binding__=ogm.get_binding(instance, self._attr_name))
+    def __get__(self: TClassBase, instance: Node, owner: Type[Node]) -> Set[TVal]:
+        return Set(__binding__=self._binding)
 
 
 class DictField(Generic[TKey, TVal], Base[Dict[TKey, TVal]]):
     def _get_value(self, instance: Node) -> Dict[TKey, TVal]:
-        return Dict(__binding__=ogm.get_binding(instance, self._attr_name))
+        return Dict(__binding__=ogm.get_node_binding(instance, self._attr_name))
 
 
 class ClassDictField(Generic[TKey, TVal], ClassBase[Dict[TKey, TVal]]):
-    def _get_value(self, instance: Node) -> Dict[TKey, TVal]:
-        return Dict(__binding__=ogm.get_binding(instance, self._attr_name))
+    def __get__(self: TClassBase, instance: Node, owner: Type[Node]) -> Dict[TKey, TVal]:
+        return Dict(__binding__=self._binding)
 
 
 from . import ogm

@@ -102,7 +102,7 @@ class UndirectedEdge(Edge, ABC):
                 Transaction.delete(f'{config.base}/edges/{get_uid(self.node_2)}/{get_uid(self.node_1)}/{cls.class_reference()}/{actual_cls}')
 
 
-class Node(ABC):
+class Node:
     @property
     def uid(self) -> str:
         return object.__getattribute__(self, '__uid__')
@@ -137,6 +137,8 @@ class Node(ABC):
         ogm.register_node_class(cls)
 
     def __new__(cls, *args, **kwargs):
+        if cls == Node:
+            raise TypeError('Cannot create objects of abstract Node class')
         obj = object.__new__(cls)
         ogm.register_node(obj)
         return obj

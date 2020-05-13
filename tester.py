@@ -14,6 +14,14 @@ class TF_IDF:
     pass
 
 
+class DirectedRelation(DirectedEdge):
+    pass
+
+
+class UndirectedRelation(UndirectedEdge):
+    pass
+
+
 class NoteStats(Node):
     _ctr: float = Field()  # add sorted index using classvar
     _note: Note = Field()
@@ -51,7 +59,7 @@ class NoteStats(Node):
         self._ctr = self.clicks / (self.views + 1.0)
 
 
-class Note(Node, ABC):
+class Note(Node):
     _stats: NoteStats = Field()
     access_level: str = Field()
     shelves: Set[Shelf] = SetField()  # todo: should this be a set or an edge?
@@ -59,7 +67,13 @@ class Note(Node, ABC):
     _search_index: TF_IDF = Field()
     _title: str = Field()
 
+    def __new__(cls, *args, **kwargs):
+        if cls == Note:
+            raise TypeError('Cannot create objects of abstract Note class')
+        return super().__new__(cls, *args, **kwargs)
+
     def __init__(self):
+        Shelf.shelves['orphans'].add_note(self)
         self._stats = NoteStats(self)
 
     def delete(self):
@@ -96,7 +110,7 @@ class Note(Node, ABC):
 
 
 class Shelf(Node):
-    shelf_names: Dict[str, Shelf] = ClassDictField()
+    shelves: Dict[str, Shelf] = ClassDictField()
     votes: int = Field()
     _name: str = Field()
     notes: Set[Note] = SetField()
@@ -113,10 +127,13 @@ class Shelf(Node):
     def name(self, value: str) -> None:
         if value == self._name:
             return
-        if value in Shelf.shelf_names:
+        if not value:
+            raise Exception('Invalid name')
+        if value in Shelf.shelves:
             raise Exception('Duplicate name')
-        del Shelf.shelf_names[self._name]
-        Shelf.shelf_names[value] = self
+        if self._name:
+            del Shelf.shelves[self._name]
+        Shelf.shelves[value] = self
         self._name = value
 
     def add_note(self, note: Note) -> None:
@@ -128,17 +145,17 @@ class Shelf(Node):
             note.shelves.discard(self)
 
 
-class Source(DirectedEdge):
+class Source(DirectedRelation):
     def __init__(self, note: Note, source: Note) -> None:
         super().__init__(parent=source, child=note)
 
 
-class Reference(DirectedEdge):
+class Reference(DirectedRelation):
     def __init__(self, note: Note, reference: Note) -> None:
         super().__init__(parent=note, child=reference)
 
 
-class Tag(DirectedEdge):
+class Tag(DirectedRelation):
     def __init__(self, note: Note, tag: Note) -> None:
         super().__init__(parent=tag, child=note)
 
@@ -173,11 +190,11 @@ class MarkdownNote(Note):
         # todo: extract references & searchable text
 
 
-class Synonym(UndirectedEdge):
+class Synonym(UndirectedRelation):
     ...
 
 
-class Antonym(UndirectedEdge):
+class Antonym(UndirectedRelation):
     ...
 
 
@@ -213,7 +230,7 @@ class VocabNote(Note):
         return self._parent_relations(Antonym)
 
 
-class ResourceNote(Note, ABC):
+class ResourceNote(Note):
     urls: Dict[str, ResourceNote] = ClassDictField()
     _mime: str = Field()
     _url: str = Field()  # todo: enforce by attaching attribs to class and using that class data to check for uniqueness
@@ -269,4 +286,7 @@ class YoutubeVRN(VideoRN):
 if __name__ == '__main__':
     revert.connect('db')
     with Transaction():
-        x = Note()
+        orphans = Shelf('orphans')
+        python = MarkdownNote()
+        python.content = 'Python'
+    print(python.content)

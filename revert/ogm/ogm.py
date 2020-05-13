@@ -66,9 +66,13 @@ def delete_node(obj: Node) -> None:
     Transaction.delete(f'{config.base}/classes/{class_reference}/objects/{uid}')
 
 
-def get_binding(obj: Node, attr: str) -> str:
+def get_node_binding(obj: Node, attr: str) -> str:
     uid = object.__getattribute__(obj, '__uid__')
     return f'{config.base}/objects/{uid}/attrs/{attr}'
+
+
+def get_class_binding(cls: Type[Node], attr: str) -> str:
+    return f'{config.base}/classes/{cls.class_reference()}/attrs/{attr}'
 
 
 def get_node(uid: str) -> Node:
@@ -84,8 +88,8 @@ def get_node(uid: str) -> Node:
 
 def encode(item: Any) -> str:
     if isinstance(item, Node):
-        return f'get_instance(\'{object.__getattribute__(item, "__uid__")}\')'
-    elif issubclass(item, Node):
+        return f'get_node(\'{object.__getattribute__(item, "__uid__")}\')'
+    elif isinstance(item, type) and issubclass(item, Node):
         return f'classes[\'{item.class_reference()}\']'
     else:
         repr_ = repr(item)
