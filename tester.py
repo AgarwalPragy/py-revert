@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Set, TypeVar
+from typing import Set, Type, TypeVar
 
 import revert
 from revert import Transaction
@@ -14,11 +14,15 @@ class TF_IDF:
     pass
 
 
-class DirectedRelation(DirectedEdge):
+class Relation:
     pass
 
 
-class UndirectedRelation(UndirectedEdge):
+class DirectedRelation(DirectedEdge, Relation):
+    pass
+
+
+class UndirectedRelation(UndirectedEdge, Relation):
     pass
 
 
@@ -62,7 +66,7 @@ class NoteStats(Node):
 class Note(Node):
     _stats: NoteStats = Field()
     access_level: str = Field()
-    shelves: Set[Shelf] = SetField()  # todo: should this be a set or an edge?
+    shelves: Set[Shelf] = SetField()
 
     _search_index: TF_IDF = Field()
     _title: str = Field()
@@ -77,12 +81,16 @@ class Note(Node):
         self._stats = NoteStats(self)
 
     def delete(self):
-        for edge in list(self.edges()):
-            edge.delete()
         self._stats.delete()
         for shelf in self.shelves:
             shelf.notes.discard(self)
         super().delete()
+
+    def _parent_relations(self, cls: Type[Relation]) -> ProtectedSet[Note]:
+        return super()._parent_relations(Source)  # type: ignore
+
+    def _child_relations(self, cls: Type[Relation]) -> ProtectedSet[Note]:
+        return super()._child_relations(Source)  # type: ignore
 
     @property
     def stats(self) -> NoteStats:
@@ -93,7 +101,7 @@ class Note(Node):
         return self._parent_relations(Source)
 
     @property
-    def extracted(self) -> Set[Note]:
+    def extracted(self) -> ProtectedSet[Note]:
         return self._child_relations(Source)
 
     @property
@@ -233,9 +241,12 @@ class VocabNote(Note):
 class ResourceNote(Note):
     urls: Dict[str, ResourceNote] = ClassDictField()
     _mime: str = Field()
-    _url: str = Field()  # todo: enforce by attaching attribs to class and using that class data to check for uniqueness
-    # todo: add index on url
+    _url: str = Field()
     _metadata: str = Field()
+
+    def __init__(self):
+        super().__init__()
+        self._url = ''
 
     @property
     def mime(self) -> str:
@@ -252,6 +263,13 @@ class ResourceNote(Note):
 
     @url.setter
     def url(self, value: str) -> None:
+        if not value:
+            raise Exception('Invalid URL')
+        if value == self._url:
+            return
+        if self._url:
+            del ResourceNote.urls[self._url]
+        ResourceNote.urls[value] = self
         self._url = value
         # set searchable text
 
@@ -289,4 +307,7 @@ if __name__ == '__main__':
         orphans = Shelf('orphans')
         python = MarkdownNote()
         python.content = 'Python'
+    print(python.content)
+    with Transaction():
+        python.delete()
     print(python.content)

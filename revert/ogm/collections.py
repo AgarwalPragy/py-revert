@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import AbstractSet, Any, Dict as tDict, FrozenSet, Iterable, Iterator, List, Mapping, MutableMapping, MutableSet, Set as tSet, Tuple, TypeVar
+from typing import AbstractSet, Any, Dict as tDict, Iterable, Iterator, List, Mapping, MutableMapping, MutableSet, Set as tSet, Tuple, TypeVar, overload
 
 from revert import Transaction
 
@@ -67,7 +67,7 @@ class Set(BaseSet[TVal], MutableSet[TVal]):
                 self.add(item)
 
 
-class ProtectedSet(BaseSet[TVal], FrozenSet[TVal]):
+class ProtectedSet(BaseSet[TVal]):
     pass
 
 
@@ -106,7 +106,7 @@ class BaseDict(Mapping[TKey, TVal]):
     def __iter__(self) -> Iterable[TKey]:
         return self.keys()
 
-    def __contains__(self, item: TKey) -> bool:
+    def __contains__(self, item: Any) -> bool:
         """ x.__contains__(y) <==> y in x. """
         return Transaction.has(f'{self.__binding__}/{ogm.encode(item)}')
 
@@ -139,10 +139,21 @@ class Dict(BaseDict[TKey, TVal], MutableMapping[TKey, TVal]):
         for key in Transaction.match_keys(f'{self.__binding__}'):
             Transaction.delete(key)
 
-    def update(self, *items: tDict[TKey, TVal]) -> None:
-        for collection in items:
-            for key, value in collection.items():
-                self[key] = value
+    @overload
+    def update(self, __m: Mapping, **kwargs: Any) -> None:
+        ...
+
+    @overload
+    def update(self, __m: Iterable[Tuple[Any, Any]], **kwargs: Any) -> None:
+        ...
+
+    @overload
+    def update(self, **kwargs: Any) -> None:
+        ...
+
+    def update(self, *args, **kwargs):
+        for key, value in dict(*args, **kwargs).items():
+            self[key] = value
 
 
 class ProtectedDict(BaseDict[TKey, TVal], Mapping[TKey, TVal]):

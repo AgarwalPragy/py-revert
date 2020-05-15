@@ -33,8 +33,8 @@ class Base(Generic[T], ABC):
         ...
 
     def __get__(self: TBase, instance: Optional[Node], owner: Type[Node]) -> Union[TBase, T]:
-        # if instance is None:
-        #     return self
+        if instance is None:
+            return self
         return self._get_value(instance)
 
     @abstractmethod

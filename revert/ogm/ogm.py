@@ -60,10 +60,11 @@ def register_node(obj: Node) -> None:
 def delete_node(obj: Node) -> None:
     intent_entity_before_delete.announce(obj)
     uid = object.__getattribute__(obj, '__uid__')
-    class_reference = object.__getattribute__(obj, '__class_reference__')
     for key in Transaction.match_keys(f'{config.base}/objects/{uid}'):
         Transaction.delete(key)
-    Transaction.delete(f'{config.base}/classes/{class_reference}/objects/{uid}')
+    for cls in obj.__class__.mro():
+        if issubclass(cls, Node):
+            Transaction.delete(f'{config.base}/classes/{cls.class_reference()}/objects/{uid}')
 
 
 def get_node_binding(obj: Node, attr: str) -> str:

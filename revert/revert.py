@@ -90,11 +90,17 @@ class Transaction:
         for transaction in Transaction.transaction_stack:
             Transaction._commit_sub_transaction(all_dirty, all_deleted, transaction.dirty, transaction.deleted)
             messages.append(transaction.message)
+        old = TrieDict({key: data[key] for key in all_dirty if key in data})
+        for key in all_deleted:
+            if key in data:
+                old[key] = data[key]
+
         commit_id = f'{datetime.now()}_{uuid4()}'
+
         with open(os.path.join(dir_, f'{commit_id}.json'), 'w') as f:
             f.write(json.dumps({
                 'parent': head,
-                'old': TrieDict({key: data[key] for key in all_dirty if key in data}).to_json(),
+                'old': old.to_json(),
                 'new': all_dirty.to_json(),
                 'messages': messages,
             }, indent=4, sort_keys=True))
@@ -102,6 +108,8 @@ class Transaction:
             f.write(f'{commit_id},{head}\n')
         commit_parent[commit_id] = head
         data.update(all_dirty)
+        for key in all_deleted:
+            del data[key]
         head = commit_id
         _save()
         Transaction.transaction_stack = []
@@ -182,7 +190,7 @@ class Transaction:
             raise NoTransactionActiveError('Cannot delete database values outside a transaction')
         if Transaction.has(key):
             Transaction.transaction_stack[-1].deleted[key] = ''
-            Transaction.transaction_stack[-1].discard(key)
+            Transaction.transaction_stack[-1].dirty.discard(key)
             return True
         else:
             return False
