@@ -1,17 +1,19 @@
 from __future__ import annotations
 
+import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Iterable, Optional, Type, TypeVar
 
 from revert import Transaction
 from . import config
-from .collections import Dict, ProtectedSet
+from .collections import Dict, ProtectedDict, ProtectedSet, Set
 
 __all__ = ['Edge', 'Node', 'DirectedEdge', 'UndirectedEdge', 'data']
 
 T = TypeVar('T')
 TNode = TypeVar('TNode', bound='Node')
+TTNode = TypeVar('TNode', bound='Type[Node]')
 
 
 # todo: reset revert to a normal ORM. Remove the graph thing and make it in the model itself
@@ -117,28 +119,60 @@ class UndirectedEdge(Edge, ABC):
 
 
 class Node:
+    def __new__(cls, *args, **kwargs):
+        if cls == Node:
+            raise TypeError('Cannot create objects of abstract Node class')
+        obj = object.__new__(cls)
+        class_reference = obj.__class__.class_reference()
+        uid = str(uuid.uuid4())
+        object.__setattr__(obj, '__uid__', uid)
+        object.__setattr__(obj, '__class_reference__', class_reference)
+        Transaction.set(f'{config.base}/objects/{uid}/class_reference', class_reference)
+        Transaction.set(f'{config.base}/objects/{uid}/uid', str(uid))
+        for cls in obj.__class__.mro():
+            if issubclass(cls, Node):
+                Set(__binding__=f'{config.base}/classes/{cls.class_reference()}/objects').add(obj)
+        ogm.register_node(obj, uid)
+        return obj
+
+    def delete(self) -> None:
+        for edge in set(self.edges()):
+            edge.delete()
+        uid = object.__getattribute__(self, '__uid__')
+        for key in Transaction.match_keys(f'{config.base}/objects/{uid}'):
+            Transaction.delete(key)
+        for cls in self.__class__.mro():
+            if issubclass(cls, Node):
+                # todo: use set
+                # todo: don't use raw Transaction stuff anywhere. Always use bindings
+                Transaction.delete(f'{config.base}/classes/{cls.class_reference()}/objects/{uid}')
+        ogm.delete_node(self)
+
+    @classmethod
+    def instances(cls: TTNode) -> ProtectedSet[TTNode]:
+        return ProtectedSet(__binding__=f'{config.base}/classes/{cls.class_reference()}/objects')
+
     @property
     def uid(self) -> str:
         return object.__getattribute__(self, '__uid__')
 
     @property
     def created_at(self) -> datetime:
-        return object.__getattribute__(self, '__created_at__')
+        return ogm.decode(Transaction.get(f'{config.base}/objects/{self.uid}/created_at'))
 
     @property
     def updated_at(self) -> datetime:
-        return object.__getattribute__(self, '__updated_at__')
-
-    def delete(self) -> None:
-        for edge in set(self.edges()):
-            edge.delete()
-        ogm.delete_node(self)
+        return ogm.decode(Transaction.get(f'{config.base}/objects/{self.uid}/updated_at'))
 
     def _parent_relations(self, edge_type: Type[Edge]) -> ProtectedSet[Node]:
         return ProtectedSet(__binding__=f'{config.base}/parent_relations/{get_uid(self)}/{edge_type.class_reference()}/')
 
     def _child_relations(self, edge_type: Type[Edge]) -> ProtectedSet[Node]:
         return ProtectedSet(__binding__=f'{config.base}/child_relations/{get_uid(self)}/{edge_type.class_reference()}/')
+
+    @property
+    def distance(self) -> ProtectedDict[Node, int]:
+        return ProtectedDict(__binding__=f'{config.base}/distance/{get_uid(self)}')
 
     def edges(self, with_node: Optional[Node] = None, edge_type: Optional[Type[Edge]] = None) -> Iterable[Edge]:
         if edge_type is None:
@@ -176,13 +210,6 @@ class Node:
     @classmethod
     def __init_subclass__(cls, **kwargs):
         ogm.register_node_class(cls)
-
-    def __new__(cls, *args, **kwargs):
-        if cls == Node:
-            raise TypeError('Cannot create objects of abstract Node class')
-        obj = object.__new__(cls)
-        ogm.register_node(obj)
-        return obj
 
     def __repr__(self):
         return f'{self.__class__.__qualname__}.get_instance(\'{object.__getattribute__(self, "__uid__")}\')'

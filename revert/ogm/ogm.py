@@ -2,18 +2,20 @@ from __future__ import annotations
 
 # noinspection PyUnresolvedReferences
 import uuid
-from typing import Any, Dict, Type, cast
+from datetime import datetime
+from typing import Any, Dict as tDict, Optional, Type, cast
 
 from intent import Intent
 
 from revert import Transaction, intent_db_connected
 from . import config
+from .collections import Set
 from .exceptions import ClassAlreadyRegisteredError, UnsavableObjectError
 from .graph import Edge, Node
 
-node_classes: Dict[str, Type[Node]] = {}
-edge_classes: Dict[str, Type[Edge]] = {}
-node_cache: Dict[str, Node] = {}
+node_classes: tDict[str, Type[Node]] = {}
+edge_classes: tDict[str, Type[Edge]] = {}
+node_cache: tDict[str, Node] = {}
 
 intent_class_registered: Intent[Type[Node]] = Intent()
 intent_entity_created: Intent[Node] = Intent()
@@ -43,28 +45,30 @@ def register_edge_class(cls: Type[Edge]) -> None:
     intent_class_registered.announce(cls)
 
 
-def register_node(obj: Node) -> None:
-    class_reference = obj.__class__.class_reference()
-    uid = str(uuid.uuid4())
-    object.__setattr__(obj, '__uid__', uid)
-    object.__setattr__(obj, '__class_reference__', class_reference)
-    for cls in obj.__class__.mro():
-        if issubclass(cls, Node):
-            Transaction.set(f'{config.base}/classes/{cls.class_reference()}/objects/{uid}', '')
-    Transaction.set(f'{config.base}/objects/{uid}/class_reference', class_reference)
-    Transaction.set(f'{config.base}/objects/{uid}/uid', str(uid))
+def register_node(obj: Node, uid: str) -> None:
+    now = datetime.now()
+    Transaction.set(f'{config.base}/objects/{uid}/created_at', encode(now))
+    Transaction.set(f'{config.base}/objects/{uid}/updated_at', encode(now))
+    object.__setattr__(obj, '__created_at__', now)
+    object.__setattr__(obj, '__updated_at__', now)
     node_cache[uid] = obj
     intent_entity_created.announce(obj)
+
+
+def update_node(obj: Optional[Node]) -> None:
+    if obj is None:
+        return
+    now = datetime.now()
+    uid = object.__getattribute__(obj, '__uid__')
+    object.__setattr__(obj, '__updated_at__', now)
+    Transaction.set(f'{config.base}/objects/{uid}/updated_at', encode(now))
 
 
 def delete_node(obj: Node) -> None:
     intent_entity_before_delete.announce(obj)
     uid = object.__getattribute__(obj, '__uid__')
-    for key in Transaction.match_keys(f'{config.base}/objects/{uid}'):
-        Transaction.delete(key)
-    for cls in obj.__class__.mro():
-        if issubclass(cls, Node):
-            Transaction.delete(f'{config.base}/classes/{cls.class_reference()}/objects/{uid}')
+    if uid in node_cache:
+        del node_cache[uid]
 
 
 def get_node_binding(obj: Node, attr: str) -> str:

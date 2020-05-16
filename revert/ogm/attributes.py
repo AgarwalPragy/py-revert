@@ -55,6 +55,7 @@ class Field(Generic[TVal], Base[TVal]):
 
     def __set__(self, instance: Node, value: TVal) -> None:
         Transaction.set(ogm.get_node_binding(instance, self._attr_name), ogm.encode(value))
+        ogm.update_node(instance)
 
 
 class ClassField(Generic[TVal], ClassBase[TVal]):
@@ -67,7 +68,7 @@ class ClassField(Generic[TVal], ClassBase[TVal]):
 
 class SetField(Generic[TVal], Base[Set[TVal]]):
     def _get_value(self, instance: Node) -> Set[TVal]:
-        return Set(__binding__=ogm.get_node_binding(instance, self._attr_name))
+        return Set(__binding__=ogm.get_node_binding(instance, self._attr_name), __instance__=instance)
 
 
 class ClassSetField(Generic[TVal], ClassBase[Set[TVal]]):
@@ -77,7 +78,7 @@ class ClassSetField(Generic[TVal], ClassBase[Set[TVal]]):
 
 class DictField(Generic[TKey, TVal], Base[Dict[TKey, TVal]]):
     def _get_value(self, instance: Node) -> Dict[TKey, TVal]:
-        return Dict(__binding__=ogm.get_node_binding(instance, self._attr_name))
+        return Dict(__binding__=ogm.get_node_binding(instance, self._attr_name), __instance__=instance)
 
 
 class ClassDictField(Generic[TKey, TVal], ClassBase[Dict[TKey, TVal]]):

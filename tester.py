@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Set, Type, TypeVar
+from typing import Type, TypeVar
 
 import revert
 from revert import Transaction
-from revert.ogm import ClassDictField, Dict, DirectedEdge, Field, Node, ProtectedSet, SetField, UndirectedEdge
+from revert.ogm import ClassDictField, Dict, DirectedEdge, Field, Node, ProtectedSet, Set, SetField, UndirectedEdge
 
 T = TypeVar('T')
 
@@ -29,7 +29,6 @@ class UndirectedRelation(UndirectedEdge, Relation):
 class NoteStats(Node):
     _ctr: float = Field()  # add sorted index using classvar
     _note: Note = Field()
-
     _views: int = Field()
     _clicks: int = Field()
     votes: int = Field()
@@ -66,8 +65,7 @@ class NoteStats(Node):
 class Note(Node):
     _stats: NoteStats = Field()
     access_level: str = Field()
-    shelves: Set[Shelf] = SetField()
-
+    _shelves: Set[Shelf] = SetField()
     _search_index: TF_IDF = Field()
     _title: str = Field()
 
@@ -82,8 +80,8 @@ class Note(Node):
 
     def delete(self):
         self._stats.delete()
-        for shelf in self.shelves:
-            shelf.notes.discard(self)
+        for shelf in self._shelves:
+            shelf.discard_note(self)
         super().delete()
 
     def _parent_relations(self, cls: Type[Relation]) -> ProtectedSet[Note]:
@@ -113,15 +111,25 @@ class Note(Node):
         return self._search_index
 
     def add_to_shelf(self, shelf: Shelf) -> None:
-        self.shelves.add(shelf)
-        shelf.notes.add(self)
+        if shelf not in self._shelves:
+            self._shelves.add(shelf)
+            shelf.add_note(self)
+
+    def remove_from_shelf(self, shelf: Shelf) -> None:
+        if shelf in self._shelves:
+            self._shelves.remove(shelf)
+            shelf.discard_note(self)
+
+    @property
+    def shelves(self) -> ProtectedSet[Shelf]:
+        return self._shelves.read_only_proxy
 
 
 class Shelf(Node):
     shelves: Dict[str, Shelf] = ClassDictField()
     votes: int = Field()
     _name: str = Field()
-    notes: Set[Note] = SetField()
+    _notes: Set[Note] = SetField()
 
     def __init__(self, name: str) -> None:
         self._name = ''
@@ -145,12 +153,23 @@ class Shelf(Node):
         self._name = value
 
     def add_note(self, note: Note) -> None:
-        self.notes.add(note)
-        note.shelves.add(self)
+        if note not in self._notes:
+            self._notes.add(note)
+            note.add_to_shelf(self)
+
+    def discard_note(self, note: Note) -> None:
+        if note in self._notes:
+            self._notes.remove(note)
+            note.remove_from_shelf(self)
 
     def delete(self):
-        for note in self.notes:
-            note.shelves.discard(self)
+        for note in self._notes:
+            note.remove_from_shelf(self)
+        super().delete()
+
+    @property
+    def notes(self) -> ProtectedSet[Note]:
+        return self._notes.read_only_proxy
 
 
 class Source(DirectedRelation):
@@ -310,4 +329,4 @@ if __name__ == '__main__':
     print(python.content)
     with Transaction():
         python.delete()
-    print(python.content)
+    # print(python.content)
