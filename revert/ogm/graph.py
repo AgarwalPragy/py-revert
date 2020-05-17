@@ -24,7 +24,7 @@ def clone(obj: T) -> T:
 
 class Edge(ABC):
     @classmethod
-    def class_reference(cls: Type[Edge]) -> str:
+    def class_reference(cls: Type[Node]) -> str:
         return f'{cls.__qualname__}'
 
     @abstractmethod
@@ -32,8 +32,8 @@ class Edge(ABC):
         ...
 
 
-def get_uid(node: Node) -> str:
-    return str(object.__getattribute__(node, '__uid__'))
+def encode(node: Node) -> str:
+    return ogm.encode(node)
 
 
 class DirectedEdge(Edge, ABC):
@@ -53,19 +53,19 @@ class DirectedEdge(Edge, ABC):
         actual_cls = self.__class__.class_reference()
         for cls in self.__class__.mro():
             if issubclass(cls, Edge):
-                Transaction.count_up_or_set(f'{config.base}/child_relations/{get_uid(parent)}/{cls.class_reference()}/{get_uid(child)}')
-                Transaction.count_up_or_set(f'{config.base}/parent_relations/{get_uid(child)}/{cls.class_reference()}/{get_uid(parent)}')
-                Transaction.set(f'{config.base}/child_edges/{get_uid(parent)}/{get_uid(child)}/{cls.class_reference()}/{actual_cls}', '')
-                Transaction.set(f'{config.base}/parent_edges/{get_uid(child)}/{get_uid(parent)}/{cls.class_reference()}/{actual_cls}', '')
+                Transaction.count_up_or_set(f'{config.base}/child_relations/{encode(parent)}/{cls.class_reference()}/{encode(child)}')
+                Transaction.count_up_or_set(f'{config.base}/parent_relations/{encode(child)}/{cls.class_reference()}/{encode(parent)}')
+                Transaction.set(f'{config.base}/child_edges/{encode(parent)}/{encode(child)}/{cls.class_reference()}/{actual_cls}', '')
+                Transaction.set(f'{config.base}/parent_edges/{encode(child)}/{encode(parent)}/{cls.class_reference()}/{actual_cls}', '')
 
     def delete(self) -> None:
         actual_cls = self.__class__.class_reference()
         for cls in self.__class__.mro():
             if issubclass(cls, Edge):
-                Transaction.count_down_or_del(f'{config.base}/child_relations/{get_uid(self.parent)}/{cls.class_reference()}/{get_uid(self.child)}')
-                Transaction.count_down_or_del(f'{config.base}/parent_relations/{get_uid(self.child)}/{cls.class_reference()}/{get_uid(self.parent)}')
-                Transaction.delete(f'{config.base}/child_edges/{get_uid(self.parent)}/{get_uid(self.child)}/{cls.class_reference()}/{actual_cls}')
-                Transaction.delete(f'{config.base}/parent_edges/{get_uid(self.child)}/{get_uid(self.parent)}/{cls.class_reference()}/{actual_cls}')
+                Transaction.count_down_or_del(f'{config.base}/child_relations/{encode(self.parent)}/{cls.class_reference()}/{encode(self.child)}')
+                Transaction.count_down_or_del(f'{config.base}/parent_relations/{encode(self.child)}/{cls.class_reference()}/{encode(self.parent)}')
+                Transaction.delete(f'{config.base}/child_edges/{encode(self.parent)}/{encode(self.child)}/{cls.class_reference()}/{actual_cls}')
+                Transaction.delete(f'{config.base}/parent_edges/{encode(self.child)}/{encode(self.parent)}/{cls.class_reference()}/{actual_cls}')
 
     def __hash__(self) -> int:
         return hash((self.__class__, self.parent, self.child))
@@ -91,23 +91,23 @@ class UndirectedEdge(Edge, ABC):
         actual_cls = self.__class__.class_reference()
         for cls in self.__class__.mro():
             if issubclass(cls, Edge):
-                Transaction.count_up_or_set(f'{config.base}/parent_relations/{get_uid(node_1)}/{cls.class_reference()}/{get_uid(node_2)}')
-                Transaction.count_up_or_set(f'{config.base}/child_relations/{get_uid(node_1)}/{cls.class_reference()}/{get_uid(node_2)}')
-                Transaction.count_up_or_set(f'{config.base}/parent_relations/{get_uid(node_2)}/{cls.class_reference()}/{get_uid(node_1)}')
-                Transaction.count_up_or_set(f'{config.base}/child_relations/{get_uid(node_2)}/{cls.class_reference()}/{get_uid(node_1)}')
-                Transaction.set(f'{config.base}/bi_edges/{get_uid(node_1)}/{get_uid(node_2)}/{cls.class_reference()}/{actual_cls}', '')
-                Transaction.set(f'{config.base}/bi_edges/{get_uid(node_2)}/{get_uid(node_1)}/{cls.class_reference()}/{actual_cls}', '')
+                Transaction.count_up_or_set(f'{config.base}/parent_relations/{encode(node_1)}/{cls.class_reference()}/{encode(node_2)}')
+                Transaction.count_up_or_set(f'{config.base}/child_relations/{encode(node_1)}/{cls.class_reference()}/{encode(node_2)}')
+                Transaction.count_up_or_set(f'{config.base}/parent_relations/{encode(node_2)}/{cls.class_reference()}/{encode(node_1)}')
+                Transaction.count_up_or_set(f'{config.base}/child_relations/{encode(node_2)}/{cls.class_reference()}/{encode(node_1)}')
+                Transaction.set(f'{config.base}/bi_edges/{encode(node_1)}/{encode(node_2)}/{cls.class_reference()}/{actual_cls}', '')
+                Transaction.set(f'{config.base}/bi_edges/{encode(node_2)}/{encode(node_1)}/{cls.class_reference()}/{actual_cls}', '')
 
     def delete(self) -> None:
         actual_cls = self.__class__.class_reference()
         for cls in self.__class__.mro():
             if issubclass(cls, Edge):
-                Transaction.count_down_or_del(f'{config.base}/parent_relations/{get_uid(self.node_1)}/{cls.class_reference()}/{get_uid(self.node_2)}')
-                Transaction.count_down_or_del(f'{config.base}/child_relations/{get_uid(self.node_1)}/{cls.class_reference()}/{get_uid(self.node_2)}')
-                Transaction.count_down_or_del(f'{config.base}/parent_relations/{get_uid(self.node_2)}/{cls.class_reference()}/{get_uid(self.node_1)}')
-                Transaction.count_down_or_del(f'{config.base}/child_relations/{get_uid(self.node_2)}/{cls.class_reference()}/{get_uid(self.node_1)}')
-                Transaction.delete(f'{config.base}/bi_edges/{get_uid(self.node_1)}/{get_uid(self.node_2)}/{cls.class_reference()}/{actual_cls}')
-                Transaction.delete(f'{config.base}/bi_edges/{get_uid(self.node_2)}/{get_uid(self.node_1)}/{cls.class_reference()}/{actual_cls}')
+                Transaction.count_down_or_del(f'{config.base}/parent_relations/{encode(self.node_1)}/{cls.class_reference()}/{encode(self.node_2)}')
+                Transaction.count_down_or_del(f'{config.base}/child_relations/{encode(self.node_1)}/{cls.class_reference()}/{encode(self.node_2)}')
+                Transaction.count_down_or_del(f'{config.base}/parent_relations/{encode(self.node_2)}/{cls.class_reference()}/{encode(self.node_1)}')
+                Transaction.count_down_or_del(f'{config.base}/child_relations/{encode(self.node_2)}/{cls.class_reference()}/{encode(self.node_1)}')
+                Transaction.delete(f'{config.base}/bi_edges/{encode(self.node_1)}/{encode(self.node_2)}/{cls.class_reference()}/{actual_cls}')
+                Transaction.delete(f'{config.base}/bi_edges/{encode(self.node_2)}/{encode(self.node_1)}/{cls.class_reference()}/{actual_cls}')
 
     def __hash__(self) -> int:
         return hash((self.__class__, self.node_1, self.node_2))
@@ -167,10 +167,10 @@ class Node:
         return ogm.decode(Transaction.get(f'{config.base}/objects/{self.uid}/updated_at'))
 
     def _parent_relations(self, edge_type: Type[Edge]) -> ProtectedSet[Node]:
-        return ProtectedSet(__binding__=f'{config.base}/parent_relations/{get_uid(self)}/{edge_type.class_reference()}/')
+        return ProtectedSet(__binding__=f'{config.base}/parent_relations/{encode(self)}/{edge_type.class_reference()}')
 
     def _child_relations(self, edge_type: Type[Edge]) -> ProtectedSet[Node]:
-        return ProtectedSet(__binding__=f'{config.base}/child_relations/{get_uid(self)}/{edge_type.class_reference()}/')
+        return ProtectedSet(__binding__=f'{config.base}/child_relations/{encode(self)}/{edge_type.class_reference()}')
 
     @property
     def parents(self) -> ProtectedSet[Node]:
@@ -184,29 +184,29 @@ class Node:
         if edge_type is None:
             edge_type = Edge
         if with_node is None:
-            for key in Transaction.match_keys(f'{config.base}/parent_edges/{get_uid(self)}/'):
+            for key in Transaction.match_keys(f'{config.base}/parent_edges/{encode(self)}/'):
                 with_node = ogm.get_node(key.split('/')[3])
                 yield from self.edges(with_node)
-            for key in Transaction.match_keys(f'{config.base}/child_edges/{get_uid(self)}/'):
+            for key in Transaction.match_keys(f'{config.base}/child_edges/{encode(self)}/'):
                 with_node = ogm.get_node(key.split('/')[3])
                 yield from self.edges(with_node)
-            for key in Transaction.match_keys(f'{config.base}/bi_edges/{get_uid(self)}/'):
+            for key in Transaction.match_keys(f'{config.base}/bi_edges/{encode(self)}/'):
                 with_node = ogm.get_node(key.split('/')[3])
                 yield from self.edges(with_node)
             return
-        for key in Transaction.match_keys(f'{config.base}/parent_edges/{get_uid(self)}/{get_uid(with_node)}/{edge_type.class_reference()}/'):
+        for key in Transaction.match_keys(f'{config.base}/parent_edges/{encode(self)}/{encode(with_node)}/{edge_type.class_reference()}/'):
             cls: Type[Edge] = ogm.edge_classes[key.split('/')[-1].strip()]
             edge: Edge = object.__new__(cls)
             object.__setattr__(edge, '__parent__', self)
             object.__setattr__(edge, '__child__', with_node)
             yield edge
-        for key in Transaction.match_keys(f'{config.base}/child_edges/{get_uid(self)}/{get_uid(with_node)}/{edge_type.class_reference()}/'):
+        for key in Transaction.match_keys(f'{config.base}/child_edges/{encode(self)}/{encode(with_node)}/{edge_type.class_reference()}/'):
             cls: Type[Edge] = ogm.edge_classes[key.split('/')[-1].strip()]
             edge: Edge = object.__new__(cls)
             object.__setattr__(edge, '__parent__', with_node)
             object.__setattr__(edge, '__child__', edge)
             yield edge
-        for key in Transaction.match_keys(f'{config.base}/bi_edges/{get_uid(self)}/{get_uid(with_node)}/{edge_type.class_reference()}/'):
+        for key in Transaction.match_keys(f'{config.base}/bi_edges/{encode(self)}/{encode(with_node)}/{edge_type.class_reference()}/'):
             cls: Type[Edge] = ogm.edge_classes[key.split('/')[-1].strip()]
             edge: Edge = object.__new__(cls)
             object.__setattr__(edge, '__node_1__', self)
