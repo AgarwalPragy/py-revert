@@ -150,6 +150,10 @@ class Node:
     def instances(cls: TTNode) -> ProtectedSet[TTNode]:
         return ProtectedSet(__binding__=f'{config.base}/classes/{cls.class_reference()}/objects')
 
+    @classmethod
+    def get_instance(cls: Type[TNode], uid: str) -> TNode:
+        return ogm.get_node(uid)
+
     @property
     def uid(self) -> str:
         return object.__getattribute__(self, '__uid__')
