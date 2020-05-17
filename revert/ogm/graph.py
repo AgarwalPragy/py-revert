@@ -172,6 +172,12 @@ class Node:
     def _child_relations(self, edge_type: Type[Edge]) -> ProtectedSet[Node]:
         return ProtectedSet(__binding__=f'{config.base}/child_relations/{get_uid(self)}/{edge_type.class_reference()}/')
 
+    def parents(self) -> ProtectedSet[Node]:
+        return self._parent_relations(Edge)
+
+    def children(self) -> ProtectedSet[Node]:
+        return self._child_relations(Edge)
+
     def edges(self, with_node: Optional[Node] = None, edge_type: Optional[Type[Edge]] = None) -> Iterable[Edge]:
         if edge_type is None:
             edge_type = Edge
