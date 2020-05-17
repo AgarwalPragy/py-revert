@@ -7,7 +7,7 @@ from typing import Any, Iterable, Optional, Type, TypeVar
 
 from revert import Transaction
 from . import config
-from .collections import Dict, ProtectedDict, ProtectedSet, Set
+from .collections import Dict, ProtectedSet, Set
 
 __all__ = ['Edge', 'Node', 'DirectedEdge', 'UndirectedEdge', 'data']
 
@@ -15,8 +15,6 @@ T = TypeVar('T')
 TNode = TypeVar('TNode', bound='Node')
 TTNode = TypeVar('TNode', bound='Type[Node]')
 
-
-# todo: reset revert to a normal ORM. Remove the graph thing and make it in the model itself
 
 def clone(obj: T) -> T:
     copy = object.__new__(obj.__class__)
@@ -169,10 +167,6 @@ class Node:
 
     def _child_relations(self, edge_type: Type[Edge]) -> ProtectedSet[Node]:
         return ProtectedSet(__binding__=f'{config.base}/child_relations/{get_uid(self)}/{edge_type.class_reference()}/')
-
-    @property
-    def distance(self) -> ProtectedDict[Node, int]:
-        return ProtectedDict(__binding__=f'{config.base}/distance/{get_uid(self)}')
 
     def edges(self, with_node: Optional[Node] = None, edge_type: Optional[Type[Edge]] = None) -> Iterable[Edge]:
         if edge_type is None:

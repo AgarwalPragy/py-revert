@@ -9,7 +9,6 @@ from intent import Intent
 
 from revert import Transaction, intent_db_connected
 from . import config
-from .collections import Set
 from .exceptions import ClassAlreadyRegisteredError, UnsavableObjectError
 from .graph import Edge, Node
 
