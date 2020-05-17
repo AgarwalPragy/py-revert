@@ -94,6 +94,15 @@ class Transaction:
         for key in all_deleted:
             if key in data:
                 old[key] = data[key]
+        for key, value in list(all_dirty.items()):
+            if key in old and old[key] == value:
+                del old[key]
+                del all_dirty[key]
+
+        if not old and not all_dirty:
+            Transaction.transaction_stack = []
+            Transaction.messages = []
+            return
 
         commit_id = f'{datetime.now()}_{uuid4()}'
 
