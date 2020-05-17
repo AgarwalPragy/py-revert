@@ -36,6 +36,9 @@ class BaseSet(AbstractSet[TVal]):
         """ Return len(self). """
         return Transaction.match_count(f'{self.__binding__}')
 
+    def __bool__(self) -> bool:
+        return len(self) > 0
+
     def __hash__(self) -> int:
         return hash(self.__binding__)
 
@@ -129,6 +132,9 @@ class BaseDict(Mapping[TKey, TVal]):
     def __len__(self) -> int:
         """ Return len(self). """
         return Transaction.match_count(f'{self.__binding__}')
+
+    def __bool__(self) -> bool:
+        return len(self) > 0
 
     def __hash__(self) -> int:
         return hash(self.__binding__)
