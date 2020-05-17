@@ -2,7 +2,7 @@ from __future__ import annotations
 
 # noinspection PyUnresolvedReferences
 import uuid
-from datetime import datetime
+import datetime
 from typing import Any, Dict as tDict, Optional, Type, cast
 
 from intent import Intent
@@ -45,7 +45,7 @@ def register_edge_class(cls: Type[Edge]) -> None:
 
 
 def register_node(obj: Node, uid: str) -> None:
-    now = datetime.now()
+    now = datetime.datetime.now()
     Transaction.set(f'{config.base}/objects/{uid}/created_at', encode(now))
     Transaction.set(f'{config.base}/objects/{uid}/updated_at', encode(now))
     object.__setattr__(obj, '__created_at__', now)
@@ -57,7 +57,7 @@ def register_node(obj: Node, uid: str) -> None:
 def update_node(obj: Optional[Node]) -> None:
     if obj is None:
         return
-    now = datetime.now()
+    now = datetime.datetime.now()
     uid = object.__getattribute__(obj, '__uid__')
     object.__setattr__(obj, '__updated_at__', now)
     Transaction.set(f'{config.base}/objects/{uid}/updated_at', encode(now))

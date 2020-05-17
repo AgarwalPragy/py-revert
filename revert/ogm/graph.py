@@ -172,9 +172,11 @@ class Node:
     def _child_relations(self, edge_type: Type[Edge]) -> ProtectedSet[Node]:
         return ProtectedSet(__binding__=f'{config.base}/child_relations/{get_uid(self)}/{edge_type.class_reference()}/')
 
+    @property
     def parents(self) -> ProtectedSet[Node]:
         return self._parent_relations(Edge)
 
+    @property
     def children(self) -> ProtectedSet[Node]:
         return self._child_relations(Edge)
 
