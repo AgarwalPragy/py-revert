@@ -5,7 +5,7 @@ import os
 from collections import defaultdict
 from datetime import datetime
 from functools import wraps
-from typing import Callable, ClassVar, DefaultDict, Dict, List, Optional, TypeVar
+from typing import Callable, ClassVar, DefaultDict, Dict, List, Optional, Tuple, TypeVar
 from uuid import uuid4
 
 from intent import Intent
@@ -16,11 +16,12 @@ from .trie import TrieDict
 
 TCallable = TypeVar('TCallable', bound=Callable)
 
-__all__ = ['connect', 'Transaction', 'undo', 'redo', 'checkout', 'intent_db_connected']
+__all__ = ['connect', 'Transaction', 'undo', 'redo', 'checkout', 'intent_db_connected', 'get_commit_dag']
 
 head: str = config.init_commit
 data = TrieDict()
-commit_parent = {}
+commit_parent: Dict[str, str] = {}
+commit_messages: Dict[str, List[str]] = {}
 commit_children: DefaultDict[str, List[str]] = defaultdict(list)
 dir_: str
 intent_db_connected: Intent[str] = Intent()
@@ -29,8 +30,12 @@ intent_db_connected: Intent[str] = Intent()
 _deleted = object()
 
 
+def get_commit_dag() -> Tuple[str, Dict[str, str], Dict[str, List[str]]]:
+    return head, commit_parent.copy(), commit_messages.copy()
+
+
 def connect(directory: str) -> None:
-    global dir_, data, head, commit_parent
+    global dir_, data, head, commit_parent, commit_messages
     dir_ = directory
     head_path = os.path.join(directory, config.head_file)
     if not os.path.exists(head_path):
@@ -42,8 +47,9 @@ def connect(directory: str) -> None:
             head = temp['head']
             data = TrieDict.from_json(temp['data'])
         with open(os.path.join(dir_, config.commit_parent_file), 'r') as f:
-            temp = (line.split(',') for line in f.readlines())
+            temp = [line.split(',') for line in f.readlines()]
             commit_parent = {line[0]: line[1] for line in temp}
+            commit_messages = {line[0]: line[2:] for line in temp}
             for commit, parent in commit_parent.items():
                 commit_children[parent].append(commit)
     intent_db_connected.announce(directory)
@@ -99,6 +105,7 @@ class Transaction:
                 del old[key]
                 del all_dirty[key]
 
+        messages = ','.join(Transaction.messages).replace('\n', ' ')
         if not old and not all_dirty:
             Transaction.transaction_stack = []
             Transaction.messages = []
@@ -114,7 +121,7 @@ class Transaction:
                 'messages': messages,
             }, indent=4, sort_keys=True))
         with open(os.path.join(dir_, config.commit_parent_file), 'a') as f:
-            f.write(f'{commit_id},{head}\n')
+            f.write(f'{commit_id},{head},{messages}\n')
         commit_parent[commit_id] = head
         data.update(all_dirty)
         for key in all_deleted:
