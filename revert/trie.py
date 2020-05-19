@@ -145,34 +145,41 @@ class TrieDict:
         for key, value in other.items():
             self[key] = value
 
-    def to_json(self) -> Union[str, Tuple[int, Dict[str, Any]], Tuple[str, int, Dict[str, Any]]]:
+    def to_json(self) -> Union[str, Dict[str, Any], Tuple[str, Dict[str, Any]]]:
         if not self._children:
             if self._value is not None:
                 return self._value
             return '{}'
         children = {key: value.to_json() for key, value in self._children.items()}
         if self._value is not None:
-            return self._value, self._count, children
+            return self._value, children
         else:
-            return self._count, children
+            return children
 
     @staticmethod
-    def from_json(data: Union[str, Tuple[int, Dict[str, Any]], Tuple[str, int, Dict[str, Any]]]) -> TrieDict:
+    def from_json(data: Union[str, Dict[str, Any], List[str, Dict[str, Any]]]) -> TrieDict:
         trie = TrieDict()
-        if data == '{}':
-            return trie
         if isinstance(data, str):
+            data = data.strip()
+            if data == '{}':
+                return trie
             trie._value = data
-            trie._count = 1
             trie._children = {}
         else:
-            if len(data) == 3:
-                trie._value, trie._count, children = data  # type: ignore
-            else:
+            children: Dict[str, Any] = {}
+            if isinstance(data, list):
+                trie._value, children = data  # type: ignore
+            elif isinstance(data, dict):
                 trie._value = None
-                trie._count, children = data  # type: ignore
+                children = data  # type: ignore
             for key, value in children.items():
                 trie._children[key] = TrieDict.from_json(value)
+        count = 0
+        if trie._value is not None:
+            count += 1
+        for child in trie._children.values():
+            count += len(child)
+        trie._count = count
         return trie
 
     def copy(self):
