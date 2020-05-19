@@ -38,29 +38,25 @@ def connect(directory: str) -> None:
     global dir_, data, head, commit_parent, commit_messages
     dir_ = directory
     head_path = os.path.join(directory, config.head_file)
+    data = TrieDict()
     if not os.path.exists(head_path):
         head = config.init_commit
-        data = TrieDict()
     else:
         with open(head_path, 'r') as f:
-            temp = json.loads(f.read())
-            head = temp['head']
-            data = TrieDict.from_json(temp['data'])
+            head = f.read().strip()
         with open(os.path.join(dir_, config.commit_parent_file), 'r') as f:
-            temp = [line.split(',') for line in f.readlines()]
+            temp = [list(map(str.strip, line.split(','))) for line in f.readlines()]
             commit_parent = {line[0]: line[1] for line in temp}
             commit_messages = {line[0]: line[2:] for line in temp}
             for commit, parent in commit_parent.items():
                 commit_children[parent].append(commit)
+        checkout(head)
     intent_db_connected.announce(directory)
 
 
-def _save() -> None:
+def _update_head() -> None:
     with open(os.path.join(dir_, config.head_file), 'w') as f:
-        f.write(json.dumps({
-            'head': head,
-            'data': data.to_json(),
-        }, indent=4, sort_keys=True))
+        f.write(head)
 
 
 class Transaction:
@@ -119,7 +115,7 @@ class Transaction:
                 'old': old.to_json(),
                 'new': all_dirty.to_json(),
                 'messages': messages,
-            }, indent=4, sort_keys=True))
+            }, sort_keys=True))
         with open(os.path.join(dir_, config.commit_parent_file), 'a') as f:
             f.write(f'{commit_id},{head},{messages}\n')
         commit_parent[commit_id] = head
@@ -127,7 +123,7 @@ class Transaction:
         for key in all_deleted:
             del data[key]
         head = commit_id
-        _save()
+        _update_head()
         Transaction.transaction_stack = []
         Transaction.messages = []
 
@@ -295,6 +291,7 @@ def checkout(commit_id: str) -> None:
     global data, head
     if Transaction.transaction_stack:
         raise InTransactionError('Cannot checkout a commit while a transaction is active')
+    commit_id = commit_id.strip()
     history = [commit_id]
     parent = commit_id
     while parent != config.init_commit:
@@ -315,14 +312,15 @@ def checkout(commit_id: str) -> None:
     for commit_id in history[history.index(common_ancestor):]:
         with open(os.path.join(dir_, f'{commit_id}.json'), 'r') as f:
             temp = json.loads(f.read())
-            old = temp['old']
-            new = temp['new']
+            old = TrieDict.from_json(temp['old'])
+            new = TrieDict.from_json(temp['new'])
             for key in old:
-                del data[key]
+                if key in data:
+                    del data[key]
             for key, value in new.items():
                 data[key] = value
         head = commit_id
-    _save()
+    _update_head()
 
 
 def undo() -> None:
@@ -330,17 +328,7 @@ def undo() -> None:
     if Transaction.transaction_stack:
         raise InTransactionError('Cannot undo while a transaction is active')
     parent = commit_parent[head]
-    with open(os.path.join(dir_, f'{head}.json'), 'r') as f:
-        temp = json.loads(f.read())
-        old = TrieDict.from_json(temp['old'])
-        new = TrieDict.from_json(temp['new'])
-        assert parent == temp['parent']
-        for key in new:
-            del data[key]
-        for key, value in old.items():
-            data[key] = value
-    head = parent
-    _save()
+    checkout(parent)
 
 
 def redo() -> None:
@@ -352,14 +340,8 @@ def redo() -> None:
     if len(commit_children[head]) > 1:
         raise AmbiguousRedoError(f'Ambiguous Redo: {head} has the following children: {commit_children[head]}')
     child = commit_children[head][0]
-    with open(os.path.join(dir_, f'{child}.json'), 'r') as f:
-        temp = json.loads(f.read())
-        old = temp['old']
-        new = temp['new']
-        assert head == temp['parent']
-        for key in old:
-            del data[key]
-        for key, value in new.items():
-            data[key] = value
-    head = child
-    _save()
+    checkout(child)
+
+
+# todo: add merge commit functionality with conflict resolution
+# todo: have multiple ordered parents of each commit. Last parent will be the higest priority and will be the conflict resolution parent
