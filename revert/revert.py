@@ -39,22 +39,22 @@ def connect(directory: str) -> None:
     dir_ = directory
     head_path = os.path.join(directory, config.head_file)
     data = TrieDict()
-    if not os.path.exists(head_path):
-        head = config.init_commit
-    else:
-        with open(head_path, 'r') as f:
-            head = f.read().strip()
+    head = config.init_commit
+    if os.path.exists(head_path):
         with open(os.path.join(dir_, config.commit_parent_file), 'r') as f:
             temp = [list(map(str.strip, line.split(','))) for line in f.readlines()]
             commit_parent = {line[0]: line[1] for line in temp}
             commit_messages = {line[0]: line[2:] for line in temp}
             for commit, parent in commit_parent.items():
                 commit_children[parent].append(commit)
-        checkout(head)
+        with open(head_path, 'r') as f:
+            expected_head = f.read().strip()
+        checkout(expected_head)
     intent_db_connected.announce(directory)
 
 
 def _update_head() -> None:
+    print('head updated to', head)
     with open(os.path.join(dir_, config.head_file), 'w') as f:
         f.write(head)
 
@@ -297,19 +297,24 @@ def checkout(commit_id: str) -> None:
     while parent != config.init_commit:
         history.append(parent)
         parent = commit_parent[parent]
+    history.append(config.init_commit)
+    history = history[::-1]
     history_set = set(history)
-    while head not in history_set:
-        with open(os.path.join(dir_, f'{head}.json'), 'r') as f:
+    common_ancestor = head
+    while common_ancestor not in history_set:
+        with open(os.path.join(dir_, f'{common_ancestor}.json'), 'r') as f:
             temp = json.loads(f.read())
             old = temp['old']
             new = temp['new']
             for key in new:
-                del data[key]
+                if key in data:
+                    del data[key]
             for key, value in old.items():
                 data[key] = value
-        head = commit_parent[head]
-    common_ancestor = head
+        common_ancestor = commit_parent[common_ancestor]
     for commit_id in history[history.index(common_ancestor):]:
+        if commit_id == config.init_commit:
+            continue
         with open(os.path.join(dir_, f'{commit_id}.json'), 'r') as f:
             temp = json.loads(f.read())
             old = TrieDict.from_json(temp['old'])
@@ -341,7 +346,6 @@ def redo() -> None:
         raise AmbiguousRedoError(f'Ambiguous Redo: {head} has the following children: {commit_children[head]}')
     child = commit_children[head][0]
     checkout(child)
-
 
 # todo: add merge commit functionality with conflict resolution
 # todo: have multiple ordered parents of each commit. Last parent will be the higest priority and will be the conflict resolution parent
