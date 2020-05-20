@@ -113,17 +113,38 @@ def test_trie_dict_items():
     assert set(t.items()) == {('x/y/w/a/b', 'value1'), ('x', 'value2'), ('y', 'value3'), ('z/a/b', 'value4')}
 
 
-def test_to_json():
+def test_to_json_empty():
+    t1 = TrieDict()
+    assert t1.to_json() == '{}'
+
+
+def test_to_json_single():
+    t1 = TrieDict()
+    t1['x'] = 'value'
+    assert t1.to_json() == {'x': 'value'}
+
+
+def test_to_json_multiple():
     t1 = TrieDict()
     t1['x'] = 'value1'
     t1['x/y'] = 'value2'
-    assert t1.to_json() == {'x': ('value1', {'y': 'value2'})}
+    t1['z'] = 'value3'
+    assert t1.to_json() == {'x': ('value1', {'y': 'value2'}), 'z': 'value3'}
 
 
-def test_from_json():
-    t1 = TrieDict.from_json({'x': ('value1', {'y': 'value2'})})
-    assert t1['x'] == 'value1'
-    assert t1['x/y'] == 'value2'
+def test_from_json_empty():
+    t1 = TrieDict.from_json('{}')
+    assert set(t1.items()) == set()
+
+
+def test_from_json_single():
+    t1 = TrieDict.from_json({'x': 'value'})
+    assert set(t1.items()) == {('x', 'value')}
+
+
+def test_from_json_multiple():
+    t1 = TrieDict.from_json({'x': ('value1', {'y': 'value2'}), 'z': 'value3'})
+    assert set(t1.items()) == {('x', 'value1'), ('x/y', 'value2'), ('z', 'value3')}
 
 
 def test_trie_dict_copy():
@@ -135,15 +156,16 @@ def test_trie_dict_copy():
 
 
 def test_trie_dict_copy_automated():
-    t1 = TrieDict()
     random.seed(0)
     trials = 10000
-    key_len = 1000
+    size = 50
+    key_len = 50
 
     for _ in range(trials):
-        key = ''.join(random.choices(string.ascii_letters + string.digits + '/', k=random.randint(1, key_len)))
-        value = str(random.randint(1, key_len))
-        t1[key] = value
-
-    t2 = t1.copy()
-    assert set(t1.items()) == set(t2.items())
+        t1 = TrieDict()
+        for _ in range(random.randint(0, size)):
+            key = ''.join(random.choices(string.ascii_letters + string.digits + '/', k=random.randint(1, key_len)))
+            value = str(random.randint(1, key_len))
+            t1[key] = value
+        t2 = t1.copy()
+        assert set(t1.items()) == set(t2.items())
