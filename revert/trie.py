@@ -6,11 +6,20 @@ from . import config
 
 
 def split_first(key: str) -> Tuple[str, str]:
+    for i, c in enumerate(key):
+        if c != config.key_separator:
+            key = key[i:]
+            break
     index = key.find(config.key_separator)
     if index == -1:
         return key, ''
     else:
-        return key[:index], key[index + 1:]
+        k, key = key[:index], key[index + 1:]
+        for i, c in enumerate(key):
+            if c != config.key_separator:
+                key = key[i:]
+                break
+        return k, key
 
 
 class TrieDict:
@@ -157,7 +166,7 @@ class TrieDict:
             return children
 
     @staticmethod
-    def from_json(data: Union[str, Dict[str, Any], List[str, Dict[str, Any]]]) -> TrieDict:
+    def from_json(data: Union[str, Dict[str, Any], Tuple[str, Dict[str, Any]]]) -> TrieDict:
         trie = TrieDict()
         if isinstance(data, str):
             data = data.strip()
@@ -167,7 +176,7 @@ class TrieDict:
             trie._children = {}
         else:
             children: Dict[str, Any] = {}
-            if isinstance(data, list):
+            if isinstance(data, (list, tuple)):
                 trie._value, children = data  # type: ignore
             elif isinstance(data, dict):
                 trie._value = None
