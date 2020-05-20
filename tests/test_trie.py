@@ -1,9 +1,13 @@
 import random
-import string
 
 import pytest
 
+import revert.config
 from revert.trie import TrieDict, split_first
+
+
+def test_key_separator():
+    assert revert.config.key_separator == '/', 'these tests assume that the key-separator is `/`'
 
 
 def test_split_first_no_separator():
@@ -20,6 +24,14 @@ def test_split_first_multiple_separators():
 
 def test_split_first_trailing_separator():
     assert split_first('x/y/z/') == ('x', 'y/z/')
+
+
+def test_split_first_leading_separator():
+    assert split_first('/x/y/z/') == ('x', 'y/z/')
+
+
+def test_split_first_double_separators():
+    assert split_first('x//y') == ('x', '/y')
 
 
 def test_trie_dict_truthiness_empty():
@@ -52,10 +64,25 @@ def test_trie_dict_get_missing_nested_key():
         value = t['x/y']
 
 
+def test_trie_dict_del_key():
+    t = TrieDict()
+    t['x'] = 'value'
+    del t['x']
+    assert t.flatten() == {}
+
+
 def test_trie_dict_del_missing_key():
     t = TrieDict()
     with pytest.raises(KeyError):
         del t['x']
+
+
+def test_trie_dict_del_nested_key():
+    t = TrieDict()
+    t['x'] = 'value1'
+    t['x/y'] = 'value2'
+    del t['x/y']
+    assert t.flatten() == {'x': 'value1'}
 
 
 def test_trie_dict_del_missing_nested_key():
@@ -85,10 +112,6 @@ def test_trie_dict_nested_key_insert_len():
     assert len(t) == 2
 
 
-def test_split_first_double_separators():
-    assert split_first('x//y') == ('x', 'y')
-
-
 def test_trie_dict_double_separators():
     t = TrieDict()
     t['x//y///w/a////b'] = 'value'
@@ -114,58 +137,91 @@ def test_trie_dict_items():
 
 
 def test_to_json_empty():
-    t1 = TrieDict()
-    assert t1.to_json() == '{}'
+    t = TrieDict()
+    assert t.to_json() == '{}'
 
 
 def test_to_json_single():
-    t1 = TrieDict()
-    t1['x'] = 'value'
-    assert t1.to_json() == {'x': 'value'}
+    t = TrieDict()
+    t['x'] = 'value'
+    assert t.to_json() == {'x': 'value'}
 
 
 def test_to_json_multiple():
-    t1 = TrieDict()
-    t1['x'] = 'value1'
-    t1['x/y'] = 'value2'
-    t1['z'] = 'value3'
-    assert t1.to_json() == {'x': ('value1', {'y': 'value2'}), 'z': 'value3'}
+    t = TrieDict()
+    t['x'] = 'value1'
+    t['x/y'] = 'value2'
+    t['z'] = 'value3'
+    assert t.to_json() == {'x': ('value1', {'y': 'value2'}), 'z': 'value3'}
 
 
 def test_from_json_empty():
-    t1 = TrieDict.from_json('{}')
-    assert set(t1.items()) == set()
+    t = TrieDict.from_json('{}')
+    assert t.flatten() == {}
 
 
 def test_from_json_single():
-    t1 = TrieDict.from_json({'x': 'value'})
-    assert set(t1.items()) == {('x', 'value')}
+    t = TrieDict.from_json({'x': 'value'})
+    assert t.flatten() == {'x': 'value'}
 
 
 def test_from_json_multiple():
-    t1 = TrieDict.from_json({'x': ('value1', {'y': 'value2'}), 'z': 'value3'})
-    assert set(t1.items()) == {('x', 'value1'), ('x/y', 'value2'), ('z', 'value3')}
+    t = TrieDict.from_json({'x': ('value1', {'y': 'value2'}), 'z': 'value3'})
+    assert t.flatten() == {'x': 'value1', 'x/y': 'value2', 'z': 'value3'}
 
 
 def test_trie_dict_copy():
-    t1 = TrieDict()
-    t1['x'] = 'value'
-    t1['x/y'] = 'value'
-    t2 = t1.copy()
-    assert set(t1.items()) == set(t2.items())
+    t = TrieDict()
+    t['x'] = 'value'
+    t['x/y'] = 'value'
+    clone = t.clone()
+    assert t.flatten() == clone.flatten()
+    assert t.to_json() == clone.to_json()
+    assert set(t.keys()) == set(clone.keys())
+    assert set(t.items()) == set(clone.items())
 
 
-def test_trie_dict_copy_automated():
+def test_trie_dict_hypothesis():
     random.seed(0)
-    trials = 10000
-    size = 50
-    key_len = 50
-
+    trials = 1000
+    size = 20
+    key_len = 20
     for _ in range(trials):
-        t1 = TrieDict()
-        for _ in range(random.randint(0, size)):
-            key = ''.join(random.choices(string.ascii_letters + string.digits + '/', k=random.randint(1, key_len)))
+        t = TrieDict()
+        normal_dict = {}
+        # insert
+        num_keys = random.randint(0, size)
+        for _ in range(num_keys):
+            key = ''.join(random.choices('a0!/', k=random.randint(1, key_len)))
             value = str(random.randint(1, key_len))
-            t1[key] = value
-        t2 = t1.copy()
-        assert set(t1.items()) == set(t2.items())
+            clean_key = key
+            while clean_key and '//' in clean_key:
+                clean_key = clean_key.replace('//', '/')
+            if clean_key.startswith('/'):
+                clean_key = clean_key[1:]
+            if clean_key.endswith('/'):
+                clean_key = clean_key[:-1]
+            if not clean_key:
+                continue
+            t[key] = value
+            normal_dict[clean_key] = value
+            assert key in t
+            assert t.flatten() == normal_dict
+            assert set(t.items()) == set(normal_dict.items())
+            assert set(t.keys()) == set(normal_dict.keys())
+            assert len(t) == len(normal_dict)
+        # clone
+        clone = t.clone()
+        assert t.flatten() == clone.flatten()
+        assert t.to_json() == clone.to_json()
+        assert set(t.keys()) == set(clone.keys())
+        assert set(t.items()) == set(clone.items())
+        # delete
+        for key in list(normal_dict.keys()):
+            del normal_dict[key]
+            del t[key]
+            assert key not in t
+            assert t.flatten() == normal_dict
+            assert set(t.items()) == set(normal_dict.items())
+            assert set(t.keys()) == set(normal_dict.keys())
+            assert len(t) == len(normal_dict)

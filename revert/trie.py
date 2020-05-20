@@ -6,20 +6,14 @@ from . import config
 
 
 def split_first(key: str) -> Tuple[str, str]:
+    i = 0
     for i, c in enumerate(key):
         if c != config.key_separator:
-            key = key[i:]
             break
-    index = key.find(config.key_separator)
+    index = key.find(config.key_separator, i)
     if index == -1:
-        return key, ''
-    else:
-        k, key = key[:index], key[index + 1:]
-        for i, c in enumerate(key):
-            if c != config.key_separator:
-                key = key[i:]
-                break
-        return k, key
+        return key[i:], ''
+    return key[i:index], key[index + 1:]
 
 
 class TrieDict:
@@ -56,9 +50,9 @@ class TrieDict:
     def __contains__(self, key: object) -> bool:
         if not isinstance(key, str):
             return False
-        if not key:
-            return self._value is not None
         k, key = split_first(key)
+        if not k:
+            return self._value is not None
         return k in self._children and key in self._children[k]
 
     def __len__(self) -> int:
@@ -68,21 +62,21 @@ class TrieDict:
         return self._count > 0
 
     def get(self, key: str) -> Optional[str]:
-        if not key:
-            return self._value
         k, key = split_first(key)
+        if not k:
+            return self._value
         if k not in self._children:
             self._children[k] = TrieDict()
         return self._children[k].get(key)
 
     def _set(self, key: str, value: str) -> bool:
-        if not key:
+        k, key = split_first(key)
+        if not k:
             exists = self._value is not None
             self._value = value
             if not exists:
                 self._count += 1
             return exists
-        k, key = split_first(key)
         if k not in self._children:
             self._children[k] = TrieDict()
         exists = self._children[k]._set(key, value)
@@ -91,13 +85,13 @@ class TrieDict:
         return exists
 
     def discard(self, key: str) -> bool:
-        if not key:
+        k, key = split_first(key)
+        if not k:
             exists = self._value is not None
             self._value = None
             if exists:
                 self._count -= 1
             return exists
-        k, key = split_first(key)
         if k not in self._children:
             self._children[k] = TrieDict()
         exists = self._children[k].discard(key)
@@ -108,7 +102,8 @@ class TrieDict:
         return exists
 
     def keys(self, prefix: str = '') -> Generator[str, None, None]:
-        if not prefix:
+        p, prefix = split_first(prefix)
+        if not p:
             if self._value is not None:
                 yield ''
             for key, item in self._children.items():
@@ -118,14 +113,14 @@ class TrieDict:
                     else:
                         yield key
         else:
-            p, prefix = split_first(prefix)
             if p not in self._children:
                 return
             for key in self._children[p].keys(prefix):
                 yield p + config.key_separator + key
 
     def items(self, prefix: str = '') -> Generator[Tuple[str, str], None, None]:
-        if not prefix:
+        p, prefix = split_first(prefix)
+        if not p:
             if self._value is not None:
                 yield '', self._value
             for prefix, child in self._children.items():
@@ -135,17 +130,16 @@ class TrieDict:
                     else:
                         yield prefix, value
         else:
-            p, prefix = split_first(prefix)
             if p not in self._children:
                 return
             for key, value in self._children[p].items(prefix):
                 yield p + config.key_separator + key, value
 
     def count(self, prefix: str = '') -> int:
-        if not prefix:
+        p, prefix = split_first(prefix)
+        if not p:
             return self._count
         else:
-            p, prefix = split_first(prefix)
             if p not in self._children:
                 return 0
             return self._children[p].count(prefix)
@@ -191,8 +185,11 @@ class TrieDict:
         trie._count = count
         return trie
 
-    def copy(self):
+    def clone(self) -> TrieDict:
         return TrieDict.from_json(self.to_json())
 
-    def __repr__(self):
+    def flatten(self) -> Dict[str, str]:
+        return {key: value for key, value in self.items()}
+
+    def __repr__(self) -> str:
         return str(self.to_json())
