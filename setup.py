@@ -10,7 +10,7 @@ with open('README.rst') as readme_file:
 with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
-requirements = ['Click>=7.0', ]
+requirements = [ ]
 
 setup_requirements = ['pytest-runner', ]
 
@@ -32,11 +32,6 @@ setup(
         'Programming Language :: Python :: 3.8',
     ],
     description="Python Boilerplate contains all the boilerplate you need to create a Python package.",
-    entry_points={
-        'console_scripts': [
-            'revert=revert.cli:main',
-        ],
-    },
     install_requires=requirements,
     license="GNU General Public License v3",
     long_description=readme + '\n\n' + history,
@@ -47,7 +42,7 @@ setup(
     setup_requires=setup_requirements,
     test_suite='tests',
     tests_require=test_requirements,
-    url='https://github.com/AgarwalPragy/revert',
-    version='0.2.7',
+    url='https://github.com/AgarwalPragy/py-revert',
+    version='0.3.0',
     zip_safe=False,
 )
