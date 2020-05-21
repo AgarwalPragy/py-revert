@@ -36,6 +36,7 @@ def get_commit_dag() -> Tuple[str, Dict[str, str], Dict[str, List[str]]]:
 
 def connect(directory: str) -> None:
     global dir_, data, head, commit_parent, commit_messages
+    print('connecting to db at', directory)
     dir_ = directory
     head_path = os.path.join(directory, config.head_file)
     data = TrieDict()
@@ -96,10 +97,10 @@ class Transaction:
         for key in all_deleted:
             if key in data:
                 old[key] = data[key]
-        for key, value in list(all_dirty.items()):
-            if key in old and old[key] == value:
-                del old[key]
-                del all_dirty[key]
+        to_remove = [key for key, value in all_dirty.items() if key in old and old[key] == value]
+        for key in to_remove:
+            del old[key]
+            del all_dirty[key]
 
         messages = ','.join(Transaction.messages).replace('\n', ' ')
         if not old and not all_dirty:

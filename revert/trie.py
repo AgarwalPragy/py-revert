@@ -116,7 +116,10 @@ class TrieDict:
             if p not in self._children:
                 return
             for key in self._children[p].keys(prefix):
-                yield p + config.key_separator + key
+                if key:
+                    yield p + config.key_separator + key
+                else:
+                    yield p
 
     def items(self, prefix: str = '') -> Generator[Tuple[str, str], None, None]:
         p, prefix = split_first(prefix)
@@ -133,7 +136,10 @@ class TrieDict:
             if p not in self._children:
                 return
             for key, value in self._children[p].items(prefix):
-                yield p + config.key_separator + key, value
+                if key:
+                    yield p + config.key_separator + key, value
+                else:
+                    yield p, value
 
     def count(self, prefix: str = '') -> int:
         p, prefix = split_first(prefix)
@@ -152,7 +158,7 @@ class TrieDict:
         if not self._children:
             if self._value is not None:
                 return self._value
-            return '{}'
+            return {}
         children = {key: value.to_json() for key, value in self._children.items()}
         if self._value is not None:
             return self._value, children
@@ -162,10 +168,10 @@ class TrieDict:
     @staticmethod
     def from_json(data: Union[str, Dict[str, Any], Tuple[str, Dict[str, Any]]]) -> TrieDict:
         trie = TrieDict()
+        if data == {}:
+            return trie
         if isinstance(data, str):
             data = data.strip()
-            if data == '{}':
-                return trie
             trie._value = data
             trie._children = {}
         else:

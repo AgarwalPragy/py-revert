@@ -118,13 +118,33 @@ def test_trie_dict_double_separators():
     assert t['x/y/w/a///b'] == 'value'
 
 
+def test_trie_dict_keys_empty():
+    t = TrieDict()
+    assert set(t.keys()) == set()
+
+
 def test_trie_dict_keys():
     t = TrieDict()
-    t['x//y///w/a////b'] = 'value'
-    t['x'] = 'value'
-    t['y'] = 'value'
+    t['x//y///w/a////b'] = 'value1'
+    t['x'] = 'value2'
+    t['y'] = 'value3'
     t['z/a/b'] = 'value4'
     assert set(t.keys()) == {'x/y/w/a/b', 'x', 'y', 'z/a/b'}
+
+
+def test_trie_dict_keys_with_prefix():
+    t = TrieDict()
+    t['x//y///w/a////b'] = 'value1'
+    t['x/y'] = 'value2'
+    t['x'] = 'value3'
+    t['y'] = 'value4'
+    t['z/a/b'] = 'value5'
+    assert set(t.keys('x')) == {'x/y/w/a/b', 'x', 'x/y'}
+
+
+def test_trie_dict_items_empty():
+    t = TrieDict()
+    assert set(t.items()) == set()
 
 
 def test_trie_dict_items():
@@ -136,9 +156,19 @@ def test_trie_dict_items():
     assert set(t.items()) == {('x/y/w/a/b', 'value1'), ('x', 'value2'), ('y', 'value3'), ('z/a/b', 'value4')}
 
 
+def test_trie_dict_items_with_prefix():
+    t = TrieDict()
+    t['x//y///w/a////b'] = 'value1'
+    t['x/y'] = 'value2'
+    t['x'] = 'value3'
+    t['y'] = 'value4'
+    t['z/a/b'] = 'value5'
+    assert set(t.items('x')) == {('x/y/w/a/b', 'value1'), ('x', 'value3'), ('x/y', 'value2')}
+
+
 def test_to_json_empty():
     t = TrieDict()
-    assert t.to_json() == '{}'
+    assert t.to_json() == {}
 
 
 def test_to_json_single():
@@ -156,7 +186,7 @@ def test_to_json_multiple():
 
 
 def test_from_json_empty():
-    t = TrieDict.from_json('{}')
+    t = TrieDict.from_json({})
     assert t.flatten() == {}
 
 
@@ -183,16 +213,17 @@ def test_trie_dict_copy():
 
 def test_trie_dict_hypothesis():
     random.seed(0)
-    trials = 1000
-    size = 20
-    key_len = 20
+    trials = 10000
+    size = 8
+    key_len = 8
     for _ in range(trials):
         t = TrieDict()
         normal_dict = {}
         # insert
         num_keys = random.randint(0, size)
         for _ in range(num_keys):
-            key = ''.join(random.choices('a0!/', k=random.randint(1, key_len)))
+            key = ''.join(random.choices('a0!///', k=random.randint(1, key_len)))
+            print(key)
             value = str(random.randint(1, key_len))
             clean_key = key
             while clean_key and '//' in clean_key:
