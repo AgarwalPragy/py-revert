@@ -1,201 +1,162 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Generator, Iterator, List, Mapping, Optional, Tuple, Union
+import json
+from datetime import datetime
+from typing import Any, Dict, Generator, Iterator, List, Optional, Tuple
 
 from . import config
 
+__all__ = ['safe_split', 'navigate', 'Trie']
 
-def split_first(key: str) -> Tuple[str, str]:
-    i = 0
-    for i, c in enumerate(key):
-        if c != config.key_separator:
+
+def safe_split(key: str) -> List[str]:
+    words = [w.replace(config.KEY_SEPARATOR, '') for w in key.split(config.KEY_SEPARATOR)]
+    return [w for w in words if w]
+
+
+def navigate(key: List[str], node: Trie) -> Optional[Trie]:
+    for k in key:
+        node = node.children.get(k, None)
+        if node is None:
             break
-    index = key.find(config.key_separator, i)
-    if index == -1:
-        return key[i:], ''
-    return key[i:index], key[index + 1:]
+    return node
 
 
-class TrieDict:
-    _children: Dict[str, TrieDict]
-    _value: Optional[str] = None
-    _count: int = 0
+class Trie:
+    children: Dict[str, Trie]
+    value: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    count: int
 
-    def __init__(self, data=Union[Dict[str, str], List[Tuple[str, str]]]) -> None:
-        self._children = {}
-        if isinstance(data, dict):
-            for key, value in data.items():
-                self[key] = value
-        elif isinstance(data, list):
-            for key, value in data:
-                self[key] = value
+    def __init__(self) -> None:
+        self.value = None
+        now = datetime.now()
+        self.created_at = now
+        self.updated_at = now
+        self.count = 0
+        self.children = {}
 
-    def __getitem__(self, key: str) -> str:
-        value = self.get(key)
-        if value is None:
-            raise KeyError(key)
-        return value
+    def __getitem__(self, key: List[str]) -> Optional[str]:
+        node = navigate(key, self)
+        return None if node is None else node.value
 
-    def __setitem__(self, key: str, value: str) -> None:
-        self._set(key, value)
-
-    def __delitem__(self, key: str) -> None:
-        exists = self.discard(key)
-        if not exists:
-            raise KeyError(key)
-
-    def __iter__(self) -> Iterator[str]:
-        return self.keys()
-
-    def __contains__(self, key: object) -> bool:
-        if not isinstance(key, str):
-            return False
-        k, key = split_first(key)
-        if not k:
-            return self._value is not None
-        return k in self._children and key in self._children[k]
+    def __contains__(self, key: List[str]) -> bool:
+        node = navigate(key, self)
+        return node is not None and node.value is not None
 
     def __len__(self) -> int:
-        return self._count
+        return self.count
 
     def __bool__(self) -> bool:
-        return self._count > 0
+        return self.count > 0
 
-    def get(self, key: str) -> Optional[str]:
-        k, key = split_first(key)
-        if not k:
-            return self._value
-        if k not in self._children:
-            self._children[k] = TrieDict()
-        return self._children[k].get(key)
+    def match_count(self, prefix: List[str]) -> int:
+        node = navigate(prefix, self)
+        return 0 if node is None else node.count
 
-    def _set(self, key: str, value: str) -> bool:
-        k, key = split_first(key)
-        if not k:
-            exists = self._value is not None
-            self._value = value
+    def set(self, key: List[str], value: str) -> Tuple[bool, bool]:
+        node = self
+        ancestors = [self]
+        for k in key:
+            child = node.children.get(k, None)
+            if child is None:
+                child = Trie()
+                node.children[k] = child
+            ancestors.append(child)
+            node = child
+        exists = node.value is not None
+        changed = exists and node.value != value
+        updated_at = datetime.now()
+        node.value = value
+        for node in ancestors:
             if not exists:
-                self._count += 1
-            return exists
-        if k not in self._children:
-            self._children[k] = TrieDict()
-        exists = self._children[k]._set(key, value)
-        if not exists:
-            self._count += 1
-        return exists
+                node.count += 1
+                node.updated_at = updated_at
+            if changed:
+                node.updated_at = updated_at
+        return exists, changed
 
-    def discard(self, key: str) -> bool:
-        k, key = split_first(key)
-        if not k:
-            exists = self._value is not None
-            self._value = None
-            if exists:
-                self._count -= 1
-            return exists
-        if k not in self._children:
-            self._children[k] = TrieDict()
-        exists = self._children[k].discard(key)
-        if not self._children[k]:
-            del self._children[k]
-        if exists:
-            self._count -= 1
-        return exists
+    def discard(self, key: List[str]) -> bool:
+        node = self
+        ancestors = [self]
+        for k in key:
+            child = node.children.get(k, None)
+            if child is None:
+                return False
+            ancestors.append(child)
+            node = child
+        if node.value is None:
+            return False
+        updated_at = datetime.now()
+        node.value = None
+        for node, k in zip(ancestors, key):
+            child = node.children[k]
+            node.updated_at = updated_at
+            node.count -= 1
+            if child.count == 1:
+                del node.children[k]
+                break
+        return True
 
-    def keys(self, prefix: str = '') -> Generator[str, None, None]:
-        p, prefix = split_first(prefix)
-        if not p:
-            if self._value is not None:
-                yield ''
-            for key, item in self._children.items():
-                for k in item:
-                    if k:
-                        yield key + config.key_separator + k
-                    else:
-                        yield key
-        else:
-            if p not in self._children:
-                return
-            for key in self._children[p].keys(prefix):
-                if key:
-                    yield p + config.key_separator + key
-                else:
-                    yield p
+    def __iter__(self) -> Iterator[str]:
+        return self.keys([])
 
-    def items(self, prefix: str = '') -> Generator[Tuple[str, str], None, None]:
-        p, prefix = split_first(prefix)
-        if not p:
-            if self._value is not None:
-                yield '', self._value
-            for prefix, child in self._children.items():
-                for key, value in child.items():
-                    if key:
-                        yield prefix + config.key_separator + key, value
-                    else:
-                        yield prefix, value
-        else:
-            if p not in self._children:
-                return
-            for key, value in self._children[p].items(prefix):
-                if key:
-                    yield p + config.key_separator + key, value
-                else:
-                    yield p, value
+    def keys(self, prefix: List[str]) -> Generator[str, None, None]:
+        node = navigate(prefix, self)
+        if node is None:
+            return
+        if node.value is not None:
+            yield config.KEY_SEPARATOR.join(prefix)
+        for key, child in node.children.items():
+            prefix.append(key)
+            for k in child.keys([]):
+                if k:
+                    prefix.append(k)
+                yield config.KEY_SEPARATOR.join(prefix)
+                if k:
+                    prefix.pop()
+            prefix.pop()
 
-    def count(self, prefix: str = '') -> int:
-        p, prefix = split_first(prefix)
-        if not p:
-            return self._count
-        else:
-            if p not in self._children:
-                return 0
-            return self._children[p].count(prefix)
+    def items(self, prefix: List[str]) -> Generator[Tuple[str, str], None, None]:
+        node = navigate(prefix, self)
+        if node is None:
+            return
+        if node.value is not None:
+            yield config.KEY_SEPARATOR.join(prefix), node.value
+        for key, child in node.children.items():
+            prefix.append(key)
+            for k, v in child.items([]):
+                if k:
+                    prefix.append(k)
+                yield config.KEY_SEPARATOR.join(prefix), v
+                if k:
+                    prefix.pop()
+            prefix.pop()
 
-    def update(self, other: Mapping[str, str]) -> None:
-        for key, value in other.items():
-            self[key] = value
-
-    def to_json(self) -> Union[str, Dict[str, Any], Tuple[str, Dict[str, Any]]]:
-        if not self._children:
-            if self._value is not None:
-                return self._value
-            return {}
-        children = {key: value.to_json() for key, value in self._children.items()}
-        if self._value is not None:
-            return self._value, children
-        else:
-            return children
+    def to_json(self) -> Any:
+        children = {key: value.to_json() for key, value in self.children.items()}
+        return [self.value, str(self.created_at), str(self.updated_at), children]
 
     @staticmethod
-    def from_json(data: Union[str, Dict[str, Any], Tuple[str, Dict[str, Any]]]) -> TrieDict:
-        trie = TrieDict()
-        if data == {}:
-            return trie
-        if isinstance(data, str):
-            data = data.strip()
-            trie._value = data
-            trie._children = {}
-        else:
-            children: Dict[str, Any] = {}
-            if isinstance(data, (list, tuple)):
-                trie._value, children = data  # type: ignore
-            elif isinstance(data, dict):
-                trie._value = None
-                children = data  # type: ignore
-            for key, value in children.items():
-                trie._children[key] = TrieDict.from_json(value)
+    def from_json(data: Any) -> Trie:
+        trie = Trie()
+        trie.value, created, updated, children = data
+        trie.created_at = datetime.fromisoformat(created)
+        trie.updated_at = datetime.fromisoformat(updated)
+        trie.children = {}
+        for key, value in list(children.items()):
+            trie.children[key] = Trie.from_json(value)
         count = 0
-        if trie._value is not None:
+        if trie.value is not None:
             count += 1
-        for child in trie._children.values():
+        for child in trie.children.values():
             count += len(child)
-        trie._count = count
+        trie.count = count
         return trie
 
-    def clone(self) -> TrieDict:
-        return TrieDict.from_json(self.to_json())
-
     def flatten(self) -> Dict[str, str]:
-        return {key: value for key, value in self.items()}
+        return {key: value for key, value in self.items([])}
 
     def __repr__(self) -> str:
-        return str(self.to_json())
+        return f'Trie.from_json({json.dumps(self.to_json())})'

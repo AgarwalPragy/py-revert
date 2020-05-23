@@ -1,4 +1,4 @@
-commit_parent_file = '.commits'
-head_file = '.HEAD'
-init_commit = 'init'
-key_separator = '/'
+COMMITS_FILE = '.commits'
+HEAD_FILE = '.HEAD'
+INIT_COMMIT = 'init'
+KEY_SEPARATOR = '/'

@@ -5,9 +5,6 @@
 import pytest
 
 
-from revert import revert
-
-
 @pytest.fixture
 def response():
     """Sample pytest fixture.

@@ -1,258 +1,259 @@
 import random
 
-import pytest
-
 import revert.config
-from revert.trie import TrieDict, split_first
+from revert.trie import Trie, safe_split
 
 
 def test_key_separator():
-    assert revert.config.key_separator == '/', 'these tests assume that the key-separator is `/`'
+    assert revert.config.KEY_SEPARATOR == '/', 'these tests assume that the key-separator is `/`'
 
 
-def test_split_first_no_separator():
-    assert split_first('x') == ('x', '')
+def test_safe_split_no_separator():
+    assert safe_split('x') == ['x']
 
 
-def test_split_first_one_separator():
-    assert split_first('x/y') == ('x', 'y')
+def test_safe_split_one_separator():
+    assert safe_split('x/y') == ['x', 'y']
 
 
-def test_split_first_multiple_separators():
-    assert split_first('x/y/z') == ('x', 'y/z')
+def test_safe_split_multiple_separators():
+    assert safe_split('x/y/z') == ['x', 'y', 'z']
 
 
-def test_split_first_trailing_separator():
-    assert split_first('x/y/z/') == ('x', 'y/z/')
+def test_safe_split_trailing_separator():
+    assert safe_split('x/y/z/') == ['x', 'y', 'z']
 
 
-def test_split_first_leading_separator():
-    assert split_first('/x/y/z/') == ('x', 'y/z/')
+def test_safe_split_leading_separator():
+    assert safe_split('/x/y/z/') == ['x', 'y', 'z']
 
 
-def test_split_first_double_separators():
-    assert split_first('x//y') == ('x', '/y')
+def test_safe_split_double_separators():
+    assert safe_split('x//y') == ['x', 'y']
 
 
-def test_trie_dict_truthiness_empty():
-    t = TrieDict()
+def test_safe_split_all():
+    assert safe_split('///x//y/////z//////////////') == ['x', 'y', 'z']
+
+
+def test_trie_truthiness_empty():
+    t = Trie()
     assert not bool(t)
 
 
-def test_trie_dict_truthiness_non_empty():
-    t = TrieDict()
-    t['x'] = 'value'
+def test_trie_truthiness_non_empty():
+    t = Trie()
+    t.set(['x'], 'value')
     assert bool(t)
 
 
-def test_trie_dict_key_insert():
-    t = TrieDict()
-    t['x'] = 'value_x'
-    assert t['x'] == 'value_x'
+def test_trie_get_missing_key():
+    t = Trie()
+    assert t[['x']] is None
 
 
-def test_trie_dict_get_missing_key():
-    t = TrieDict()
-    with pytest.raises(KeyError):
-        value = t['x']
+def test_trie_get_missing_nested_key():
+    t = Trie()
+    t.set(['x'], 'value')
+    assert t[['x', 'y']] is None
 
 
-def test_trie_dict_get_missing_nested_key():
-    t = TrieDict()
-    t['x'] = 'value'
-    with pytest.raises(KeyError):
-        value = t['x/y']
+def test_trie_del_key():
+    t = Trie()
+    t.set(['x'], 'value')
+    assert t.discard(['x'])
+    assert t[['x']] is None
 
 
-def test_trie_dict_del_key():
-    t = TrieDict()
-    t['x'] = 'value'
-    del t['x']
-    assert t.flatten() == {}
+def test_trie_del_missing_key():
+    t = Trie()
+    assert not t.discard(['x'])
 
 
-def test_trie_dict_del_missing_key():
-    t = TrieDict()
-    with pytest.raises(KeyError):
-        del t['x']
-
-
-def test_trie_dict_del_nested_key():
-    t = TrieDict()
-    t['x'] = 'value1'
-    t['x/y'] = 'value2'
-    del t['x/y']
+def test_trie_del_nested_key():
+    t = Trie()
+    t.set(['x'], 'value1')
+    t.set(['x', 'y'], 'value2')
+    assert t.discard(['x', 'y'])
     assert t.flatten() == {'x': 'value1'}
 
 
-def test_trie_dict_del_missing_nested_key():
-    t = TrieDict()
-    t['x'] = 'value'
-    with pytest.raises(KeyError):
-        del t['x/y']
+def test_trie_del_missing_nested_key():
+    t = Trie()
+    t.set(['x'], 'value')
+    assert not t.discard(['x', 'y'])
 
 
-def test_trie_dict_nested_key_insert():
-    t = TrieDict()
-    t['x/y'] = 'value_x'
-    assert t['x/y'] == 'value_x'
+def test_trie_key_insert():
+    t = Trie()
+    t.set(['x'], 'value_x')
+    assert t[['x']] == 'value_x'
 
 
-def test_trie_dict_key_insert_len():
-    t = TrieDict()
-    t['x'] = 'value_x'
-    t['y'] = 'value_y'
+def test_trie_key_overwrite():
+    t = Trie()
+    t.set(['x'], 'value_x')
+    t.set(['x'], 'value_y')
+    assert t[['x']] == 'value_y'
+
+
+def test_trie_nested_key_insert():
+    t = Trie()
+    t.set(['x', 'y'], 'value_1')
+    assert t[['x', 'y']] == 'value_1'
+
+
+def test_trie_nested_key_overwrite():
+    t = Trie()
+    t.set(['x', 'y'], 'value_1')
+    t.set(['x', 'y'], 'value_2')
+    assert t[['x', 'y']] == 'value_2'
+
+
+def test_trie_len_empty():
+    t = Trie()
+    assert len(t) == 0
+
+
+def test_trie_len():
+    t = Trie()
+    t.set(['x'], 'value_x')
+    t.set(['y'], 'value_y')
     assert len(t) == 2
 
 
-def test_trie_dict_nested_key_insert_len():
-    t = TrieDict()
-    t['x'] = 'value_x'
-    t['x/y'] = 'value_y'
+def test_trie_nested_len():
+    t = Trie()
+    t.set(['x'], 'value_x')
+    t.set(['x', 'y'], 'value_y')
     assert len(t) == 2
 
 
-def test_trie_dict_double_separators():
-    t = TrieDict()
-    t['x//y///w/a////b'] = 'value'
-    assert t['x/y/w/a///b'] == 'value'
+def test_trie_match_count_empty():
+    t = Trie()
+    assert t.match_count([]) == 0
 
 
-def test_trie_dict_keys_empty():
-    t = TrieDict()
-    assert set(t.keys()) == set()
+def test_trie_match_count_empty_2():
+    t = Trie()
+    assert t.match_count(['x', 'y']) == 0
 
 
-def test_trie_dict_keys():
-    t = TrieDict()
-    t['x//y///w/a////b'] = 'value1'
-    t['x'] = 'value2'
-    t['y'] = 'value3'
-    t['z/a/b'] = 'value4'
-    assert set(t.keys()) == {'x/y/w/a/b', 'x', 'y', 'z/a/b'}
+def test_trie_match_count():
+    t = Trie()
+    t.set(['x'], 'value_x')
+    t.set(['y'], 'value_y')
+    assert t.match_count(['x']) == 1
+    assert t.match_count(['y']) == 1
+    assert t.match_count([]) == 2
 
 
-def test_trie_dict_keys_with_prefix():
-    t = TrieDict()
-    t['x//y///w/a////b'] = 'value1'
-    t['x/y'] = 'value2'
-    t['x'] = 'value3'
-    t['y'] = 'value4'
-    t['z/a/b'] = 'value5'
-    assert set(t.keys('x')) == {'x/y/w/a/b', 'x', 'x/y'}
+def test_trie_nested_match_count():
+    t = Trie()
+    t.set(['x'], 'value_x')
+    t.set(['x', 'y'], 'value_y')
+    assert t.match_count(['x', 'y']) == 1
+    assert t.match_count(['x']) == 2
+    assert t.match_count([]) == 2
 
 
-def test_trie_dict_items_empty():
-    t = TrieDict()
-    assert set(t.items()) == set()
+def test_trie_keys_empty():
+    t = Trie()
+    assert sorted(t.keys([])) == []
 
 
-def test_trie_dict_items():
-    t = TrieDict()
-    t['x//y///w/a////b'] = 'value1'
-    t['x'] = 'value2'
-    t['y'] = 'value3'
-    t['z/a/b'] = 'value4'
-    assert set(t.items()) == {('x/y/w/a/b', 'value1'), ('x', 'value2'), ('y', 'value3'), ('z/a/b', 'value4')}
+def test_trie_keys():
+    t = Trie()
+    t.set(['x', 'y', 'w', 'a', 'b'], 'value1')
+    t.set(['x'], 'value2')
+    t.set(['y'], 'value3')
+    t.set(['z', 'a', 'b'], 'value4')
+    assert sorted(t.keys([])) == sorted(['x/y/w/a/b', 'x', 'y', 'z/a/b'])
 
 
-def test_trie_dict_items_with_prefix():
-    t = TrieDict()
-    t['x//y///w/a////b'] = 'value1'
-    t['x/y'] = 'value2'
-    t['x'] = 'value3'
-    t['y'] = 'value4'
-    t['z/a/b'] = 'value5'
-    assert set(t.items('x')) == {('x/y/w/a/b', 'value1'), ('x', 'value3'), ('x/y', 'value2')}
+def test_trie_keys_with_prefix():
+    t = Trie()
+    t.set(['x', 'y', 'w', 'a', 'b'], 'value1')
+    t.set(['x'], 'value2')
+    t.set(['y'], 'value3')
+    t.set(['z', 'a', 'b'], 'value4')
+    t.set(['x', 'y'], 'value5')
+    assert sorted(t.keys(['x'])) == sorted(['x/y/w/a/b', 'x', 'x/y'])
 
 
-def test_to_json_empty():
-    t = TrieDict()
-    assert t.to_json() == {}
+def test_trie_keys_with_bad_prefix():
+    t = Trie()
+    t.set(['x', 'y', 'w', 'a', 'b'], 'value1')
+    t.set(['x'], 'value2')
+    t.set(['y'], 'value3')
+    t.set(['z', 'a', 'b'], 'value4')
+    t.set(['x', 'y'], 'value5')
+    assert sorted(t.keys(['c'])) == []
 
 
-def test_to_json_single():
-    t = TrieDict()
-    t['x'] = 'value'
-    assert t.to_json() == {'x': 'value'}
+def test_trie_items_empty():
+    t = Trie()
+    assert sorted(t.items([])) == []
 
 
-def test_to_json_multiple():
-    t = TrieDict()
-    t['x'] = 'value1'
-    t['x/y'] = 'value2'
-    t['z'] = 'value3'
-    assert t.to_json() == {'x': ('value1', {'y': 'value2'}), 'z': 'value3'}
+def test_trie_items():
+    t = Trie()
+    t.set(['x', 'y', 'w', 'a', 'b'], 'value1')
+    t.set(['x'], 'value2')
+    t.set(['y'], 'value3')
+    t.set(['z', 'a', 'b'], 'value4')
+    assert sorted(t.items([])) == sorted([('x/y/w/a/b', 'value1'), ('x', 'value2'), ('y', 'value3'), ('z/a/b', 'value4')])
 
 
-def test_from_json_empty():
-    t = TrieDict.from_json({})
-    assert t.flatten() == {}
+def test_trie_items_with_prefix():
+    t = Trie()
+    t.set(['x', 'y', 'w', 'a', 'b'], 'value1')
+    t.set(['x'], 'value2')
+    t.set(['y'], 'value3')
+    t.set(['z', 'a', 'b'], 'value4')
+    t.set(['x', 'y'], 'value5')
+    assert sorted(t.items(['x'])) == sorted([('x/y/w/a/b', 'value1'), ('x', 'value2'), ('x/y', 'value5')])
 
 
-def test_from_json_single():
-    t = TrieDict.from_json({'x': 'value'})
-    assert t.flatten() == {'x': 'value'}
+def test_trie_items_with_bad_prefix():
+    t = Trie()
+    t.set(['x', 'y', 'w', 'a', 'b'], 'value1')
+    t.set(['x'], 'value2')
+    t.set(['y'], 'value3')
+    t.set(['z', 'a', 'b'], 'value4')
+    t.set(['x', 'y'], 'value5')
+    assert sorted(t.items(['c'])) == []
 
 
-def test_from_json_multiple():
-    t = TrieDict.from_json({'x': ('value1', {'y': 'value2'}), 'z': 'value3'})
-    assert t.flatten() == {'x': 'value1', 'x/y': 'value2', 'z': 'value3'}
-
-
-def test_trie_dict_copy():
-    t = TrieDict()
-    t['x'] = 'value'
-    t['x/y'] = 'value'
-    clone = t.clone()
-    assert t.flatten() == clone.flatten()
-    assert t.to_json() == clone.to_json()
-    assert set(t.keys()) == set(clone.keys())
-    assert set(t.items()) == set(clone.items())
-
-
-def test_trie_dict_hypothesis():
+def test_trie_hypothesis():
     random.seed(0)
     trials = 10000
     size = 8
     key_len = 8
     for _ in range(trials):
-        t = TrieDict()
+        t = Trie()
         normal_dict = {}
         # insert
         num_keys = random.randint(0, size)
         for _ in range(num_keys):
-            key = ''.join(random.choices('a0!///', k=random.randint(1, key_len)))
-            print(key)
+            key = safe_split(''.join(random.choices('a0!///', k=random.randint(1, key_len))))
             value = str(random.randint(1, key_len))
-            clean_key = key
-            while clean_key and '//' in clean_key:
-                clean_key = clean_key.replace('//', '/')
-            if clean_key.startswith('/'):
-                clean_key = clean_key[1:]
-            if clean_key.endswith('/'):
-                clean_key = clean_key[:-1]
-            if not clean_key:
+            if not key:
                 continue
-            t[key] = value
-            normal_dict[clean_key] = value
+            t.set(key, value)
+            normal_dict['/'.join(key)] = value
             assert key in t
             assert t.flatten() == normal_dict
-            assert set(t.items()) == set(normal_dict.items())
-            assert set(t.keys()) == set(normal_dict.keys())
+            assert sorted(t.items([])) == sorted(normal_dict.items())
+            assert sorted(t.keys([])) == sorted(normal_dict.keys())
             assert len(t) == len(normal_dict)
-        # clone
-        clone = t.clone()
-        assert t.flatten() == clone.flatten()
-        assert t.to_json() == clone.to_json()
-        assert set(t.keys()) == set(clone.keys())
-        assert set(t.items()) == set(clone.items())
+        assert sorted(Trie.from_json(t.to_json()).items([])) == sorted(t.items([]))
         # delete
         for key in list(normal_dict.keys()):
             del normal_dict[key]
-            del t[key]
-            assert key not in t
+            assert t.discard(safe_split(key))
+            assert safe_split(key) not in t
             assert t.flatten() == normal_dict
-            assert set(t.items()) == set(normal_dict.items())
-            assert set(t.keys()) == set(normal_dict.keys())
+            assert sorted(t.items([])) == sorted(normal_dict.items())
+            assert sorted(t.keys([])) == sorted(normal_dict.keys())
             assert len(t) == len(normal_dict)
