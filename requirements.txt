@@ -1,0 +1,1 @@
+-e git+git@github.com:AgarwalPragy/py-intent@7e8cc202ddefa7fb45c59578f647e93eb0c08cc0#egg=intent
