@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Generator, Iterator, List, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 from . import config
 
@@ -27,7 +27,7 @@ class Trie:
                 return None
         return node.value
 
-    def set(self, key: K, value: str) -> Optional[str]:
+    def put(self, key: K, value: str) -> Optional[str]:
         node = self
         for k in key:
             child = node.children.get(k, None)
@@ -45,7 +45,7 @@ class Trie:
                 node = node.children[k]
         return oldvalue
 
-    def set_if_not_present(self, key: K, value: str) -> None:
+    def put_if_not_present(self, key: K, value: str) -> None:
         node = self
         for k in key:
             child = node.children.get(k, None)
@@ -176,3 +176,10 @@ class Trie:
 
     def __repr__(self) -> str:
         return str(self.to_json())
+
+    def count_down_or_del(self, key: K) -> Optional[int]:
+
+        pass
+
+    def count_up_or_set(self, key: K) -> Optional[int]:
+        pass

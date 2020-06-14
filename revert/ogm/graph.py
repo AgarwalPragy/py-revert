@@ -55,8 +55,8 @@ class DirectedEdge(Edge, ABC):
             if issubclass(cls, Edge):
                 Transaction.count_up_or_set(f'{config.base}/child_relations/{encode(parent)}/{cls.class_reference()}/{encode(child)}')
                 Transaction.count_up_or_set(f'{config.base}/parent_relations/{encode(child)}/{cls.class_reference()}/{encode(parent)}')
-                Transaction.set(f'{config.base}/child_edges/{encode(parent)}/{encode(child)}/{cls.class_reference()}/{actual_cls}', '')
-                Transaction.set(f'{config.base}/parent_edges/{encode(child)}/{encode(parent)}/{cls.class_reference()}/{actual_cls}', '')
+                Transaction.put(f'{config.base}/child_edges/{encode(parent)}/{encode(child)}/{cls.class_reference()}/{actual_cls}', '')
+                Transaction.put(f'{config.base}/parent_edges/{encode(child)}/{encode(parent)}/{cls.class_reference()}/{actual_cls}', '')
 
     def delete(self) -> None:
         actual_cls = self.__class__.class_reference()
@@ -95,8 +95,8 @@ class UndirectedEdge(Edge, ABC):
                 Transaction.count_up_or_set(f'{config.base}/child_relations/{encode(node_1)}/{cls.class_reference()}/{encode(node_2)}')
                 Transaction.count_up_or_set(f'{config.base}/parent_relations/{encode(node_2)}/{cls.class_reference()}/{encode(node_1)}')
                 Transaction.count_up_or_set(f'{config.base}/child_relations/{encode(node_2)}/{cls.class_reference()}/{encode(node_1)}')
-                Transaction.set(f'{config.base}/bi_edges/{encode(node_1)}/{encode(node_2)}/{cls.class_reference()}/{actual_cls}', '')
-                Transaction.set(f'{config.base}/bi_edges/{encode(node_2)}/{encode(node_1)}/{cls.class_reference()}/{actual_cls}', '')
+                Transaction.put(f'{config.base}/bi_edges/{encode(node_1)}/{encode(node_2)}/{cls.class_reference()}/{actual_cls}', '')
+                Transaction.put(f'{config.base}/bi_edges/{encode(node_2)}/{encode(node_1)}/{cls.class_reference()}/{actual_cls}', '')
 
     def delete(self) -> None:
         actual_cls = self.__class__.class_reference()
@@ -125,8 +125,8 @@ class Node:
         uid = str(uuid.uuid4())
         object.__setattr__(obj, '__uid__', uid)
         object.__setattr__(obj, '__class_reference__', class_reference)
-        Transaction.set(f'{config.base}/objects/{uid}/class_reference', class_reference)
-        Transaction.set(f'{config.base}/objects/{uid}/uid', str(uid))
+        Transaction.put(f'{config.base}/objects/{uid}/class_reference', class_reference)
+        Transaction.put(f'{config.base}/objects/{uid}/uid', str(uid))
         for cls in obj.__class__.mro():
             if issubclass(cls, Node):
                 Set(__binding__=f'{config.base}/classes/{cls.class_reference()}/objects').add(obj)

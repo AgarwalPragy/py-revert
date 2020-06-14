@@ -25,7 +25,7 @@ def db_connected(directory: str) -> None:
     with Transaction(message='schema change'):
         for cls in node_classes.values():
             mro = ','.join([parent.class_reference() for parent in cls.mro() if issubclass(parent, Node)])
-            Transaction.set(f'{config.base}/classes/{cls.class_reference()}/mro', mro)
+            Transaction.put(f'{config.base}/classes/{cls.class_reference()}/mro', mro)
 
 
 def register_node_class(cls: Type[Node]) -> None:
@@ -46,8 +46,8 @@ def register_edge_class(cls: Type[Edge]) -> None:
 
 def register_node(obj: Node, uid: str) -> None:
     now = datetime.datetime.now()
-    Transaction.set(f'{config.base}/objects/{uid}/created_at', encode(now))
-    Transaction.set(f'{config.base}/objects/{uid}/updated_at', encode(now))
+    Transaction.put(f'{config.base}/objects/{uid}/created_at', encode(now))
+    Transaction.put(f'{config.base}/objects/{uid}/updated_at', encode(now))
     object.__setattr__(obj, '__created_at__', now)
     object.__setattr__(obj, '__updated_at__', now)
     node_cache[uid] = obj
@@ -60,7 +60,7 @@ def update_node(obj: Optional[Node]) -> None:
     now = datetime.datetime.now()
     uid = object.__getattribute__(obj, '__uid__')
     object.__setattr__(obj, '__updated_at__', now)
-    Transaction.set(f'{config.base}/objects/{uid}/updated_at', encode(now))
+    Transaction.put(f'{config.base}/objects/{uid}/updated_at', encode(now))
 
 
 def delete_node(obj: Node) -> None:

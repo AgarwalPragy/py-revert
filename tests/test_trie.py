@@ -6,11 +6,11 @@ from revert.trie import Trie, split
 
 def _trie():
     t = Trie()
-    t.set(['x', 'y', 'w', 'a', 'b'], 'value1')
-    t.set(['x', 'y'], 'value2')
-    t.set(['x'], 'value3')
-    t.set(['y'], 'value4')
-    t.set(['z', 'a', 'b'], 'value5')
+    t.put(['x', 'y', 'w', 'a', 'b'], 'value1')
+    t.put(['x', 'y'], 'value2')
+    t.put(['x'], 'value3')
+    t.put(['y'], 'value4')
+    t.put(['z', 'a', 'b'], 'value5')
     return t
 
 
@@ -61,13 +61,13 @@ def test_trie_dict_truthiness_empty():
 
 def test_trie_dict_truthiness_non_empty():
     t = Trie()
-    t.set(['x'], 'value')
+    t.put(['x'], 'value')
     assert bool(t)
 
 
 def test_trie_dict_key_insert():
     t = Trie()
-    assert t.set(['x'], 'value_x') is None
+    assert t.put(['x'], 'value_x') is None
     assert t[['x']] == 'value_x'
 
 
@@ -78,13 +78,13 @@ def test_trie_dict_get_missing_key():
 
 def test_trie_dict_get_missing_nested_key():
     t = Trie()
-    assert t.set(['x'], 'value') is None
+    assert t.put(['x'], 'value') is None
     assert t[['x', 'y']] is None
 
 
 def test_trie_dict_del_key():
     t = Trie()
-    t.set(['x'], 'value')
+    t.put(['x'], 'value')
     assert t.discard(['x']) == 'value'
     assert t.flatten() == {}
 
@@ -96,35 +96,35 @@ def test_trie_dict_del_missing_key():
 
 def test_trie_dict_del_nested_key():
     t = Trie()
-    t.set(['x'], 'value1')
-    t.set(['x', 'y'], 'value2')
+    t.put(['x'], 'value1')
+    t.put(['x', 'y'], 'value2')
     assert t.discard(['x', 'y']) == 'value2'
     assert t.flatten() == {'x': 'value1'}
 
 
 def test_trie_dict_del_missing_nested_key():
     t = Trie()
-    t.set(['x'], 'value')
+    t.put(['x'], 'value')
     assert t.discard(['x', 'y']) is None
 
 
 def test_trie_dict_nested_key_insert():
     t = Trie()
-    t.set(['x', 'y'], 'value_x')
+    t.put(['x', 'y'], 'value_x')
     assert t[['x', 'y']] == 'value_x'
 
 
 def test_trie_dict_key_insert_len():
     t = Trie()
-    t.set(['x'], 'value_x')
-    t.set(['y'], 'value_y')
+    t.put(['x'], 'value_x')
+    t.put(['y'], 'value_y')
     assert len(t) == 2
 
 
 def test_trie_dict_nested_key_insert_len():
     t = Trie()
-    t.set(['x'], 'value_x')
-    t.set(['x', 'y'], 'value_y')
+    t.put(['x'], 'value_x')
+    t.put(['x', 'y'], 'value_y')
     assert len(t) == 2
 
 
@@ -161,15 +161,15 @@ def test_to_json_empty():
 
 def test_to_json_single():
     t = Trie()
-    t.set(['x'], 'value')
+    t.put(['x'], 'value')
     assert t.to_json() == {'x': 'value'}
 
 
 def test_to_json_multiple():
     t = Trie()
-    t.set(['x'], 'value1')
-    t.set(['x', 'y'], 'value2')
-    t.set(['z'], 'value3')
+    t.put(['x'], 'value1')
+    t.put(['x', 'y'], 'value2')
+    t.put(['z'], 'value3')
     assert t.to_json() == {'x': ('value1', {'y': 'value2'}), 'z': 'value3'}
 
 
@@ -190,8 +190,8 @@ def test_from_json_multiple():
 
 def test_trie_dict_copy():
     t = Trie()
-    t.set(['x'], 'value')
-    t.set(['x', 'y'], 'value')
+    t.put(['x'], 'value')
+    t.put(['x', 'y'], 'value')
     clone = t.clone()
     assert t.flatten() == clone.flatten()
     assert t.to_json() == clone.to_json()
@@ -214,7 +214,7 @@ def test_trie_dict_hypothesis():
             print(key)
             value = str(random.randint(1, key_len))
             clean_key = '/'.join(split(key))
-            t.set(split(key), value)
+            t.put(split(key), value)
             normal_dict[clean_key] = value
             assert split(key) in t
             assert t.flatten() == normal_dict

@@ -54,7 +54,7 @@ class Field(Generic[TVal], Base[TVal]):
         return ogm.decode(Transaction.get(ogm.get_node_binding(instance, self._attr_name)))
 
     def __set__(self, instance: Node, value: TVal) -> None:
-        Transaction.set(ogm.get_node_binding(instance, self._attr_name), ogm.encode(value))
+        Transaction.put(ogm.get_node_binding(instance, self._attr_name), ogm.encode(value))
         ogm.update_node(instance)
 
 
@@ -63,7 +63,7 @@ class ClassField(Generic[TVal], ClassBase[TVal]):
         return ogm.decode(Transaction.get(self._binding))
 
     def __set__(self, instance: Node, value: TVal) -> None:
-        Transaction.set(self._binding, ogm.encode(value))
+        Transaction.put(self._binding, ogm.encode(value))
 
 
 class SetField(Generic[TVal], Base[Set[TVal]]):

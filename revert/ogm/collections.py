@@ -59,7 +59,7 @@ class Set(BaseSet[TVal], MutableSet[TVal]):
         self.__instance__ = kwargs.get('__instance__', None)
 
     def add(self, item: TVal) -> None:
-        Transaction.set(f'{self.__binding__}/{ogm.encode(item)}', '')
+        Transaction.put(f'{self.__binding__}/{ogm.encode(item)}', '')
         ogm.update_node(self.__instance__)
 
     def clear(self) -> None:
@@ -156,7 +156,7 @@ class Dict(BaseDict[TKey, TVal], MutableMapping[TKey, TVal]):
         self.__instance__ = kwargs.get('__instance__', None)
 
     def __setitem__(self, key: TKey, value: TVal) -> None:
-        Transaction.set(f'{self.__binding__}/{ogm.encode(key)}', ogm.encode(value))
+        Transaction.put(f'{self.__binding__}/{ogm.encode(key)}', ogm.encode(value))
         ogm.update_node(self.__instance__)
 
     def __delitem__(self, key: TKey) -> None:

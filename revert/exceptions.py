@@ -1,4 +1,4 @@
-__all__ = ['DBError', 'NoTransactionActiveError', 'InTransactionError', 'AmbiguousRedoError']
+__all__ = ['DBError', 'NoTransactionActiveError', 'InTransactionError', 'AmbiguousRedoError', 'AmbiguousUndoError']
 
 
 class DBError(Exception):
@@ -14,4 +14,8 @@ class InTransactionError(DBError):
 
 
 class AmbiguousRedoError(DBError):
+    pass
+
+
+class AmbiguousUndoError(DBError):
     pass
