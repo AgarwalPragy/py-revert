@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import datetime
 # noinspection PyUnresolvedReferences
 import uuid
-import datetime
 from typing import Any, Dict as tDict, Optional, Type, cast
 
 from intent import Intent
 
-from revert import Transaction, intent_db_connected
+import revert
 from . import config
 from .exceptions import ClassAlreadyRegisteredError, UnsavableObjectError
 from .graph import Edge, Node
@@ -22,10 +22,10 @@ intent_entity_before_delete: Intent[Node] = Intent()
 
 
 def db_connected(directory: str) -> None:
-    with Transaction(message='schema change'):
+    with revert.transaction(message='schema change'):
         for cls in node_classes.values():
             mro = ','.join([parent.class_reference() for parent in cls.mro() if issubclass(parent, Node)])
-            Transaction.put(f'{config.base}/classes/{cls.class_reference()}/mro', mro)
+            revert.put(f'{config.base}/classes/{cls.class_reference()}/mro', mro)
 
 
 def register_node_class(cls: Type[Node]) -> None:
@@ -46,8 +46,8 @@ def register_edge_class(cls: Type[Edge]) -> None:
 
 def register_node(obj: Node, uid: str) -> None:
     now = datetime.datetime.now()
-    Transaction.put(f'{config.base}/objects/{uid}/created_at', encode(now))
-    Transaction.put(f'{config.base}/objects/{uid}/updated_at', encode(now))
+    revert.put(f'{config.base}/objects/{uid}/created_at', encode(now))
+    revert.put(f'{config.base}/objects/{uid}/updated_at', encode(now))
     object.__setattr__(obj, '__created_at__', now)
     object.__setattr__(obj, '__updated_at__', now)
     node_cache[uid] = obj
@@ -60,7 +60,7 @@ def update_node(obj: Optional[Node]) -> None:
     now = datetime.datetime.now()
     uid = object.__getattribute__(obj, '__uid__')
     object.__setattr__(obj, '__updated_at__', now)
-    Transaction.put(f'{config.base}/objects/{uid}/updated_at', encode(now))
+    revert.put(f'{config.base}/objects/{uid}/updated_at', encode(now))
 
 
 def delete_node(obj: Node) -> None:
@@ -82,7 +82,7 @@ def get_class_binding(cls: Type[Node], attr: str) -> str:
 def get_node(uid: str) -> Node:
     if uid in node_cache:
         return node_cache[uid]
-    class_reference = Transaction.get(f'{config.base}/objects/{uid}/class_reference')
+    class_reference = revert.get(f'{config.base}/objects/{uid}/class_reference')
     cls = node_classes.get(class_reference, Node)
     obj = cast(Node, object.__new__(cls))
     object.__setattr__(obj, '__uid__', uid)
@@ -106,4 +106,4 @@ def decode(repr_: str) -> Any:
     return eval(repr_)
 
 
-intent_db_connected.subscribe(db_connected)
+revert.intent_db_connected.subscribe(db_connected)

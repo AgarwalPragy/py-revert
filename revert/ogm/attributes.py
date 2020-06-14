@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Generic, Literal, Optional, Type, TypeVar, Union, overload
 
-from revert import Transaction
+import revert
 from .collections import Dict, Set
 from .graph import Node
 
@@ -51,19 +51,19 @@ class ClassBase(Generic[T]):
 
 class Field(Generic[TVal], Base[TVal]):
     def _get_value(self, instance: Node) -> TVal:
-        return ogm.decode(Transaction.get(ogm.get_node_binding(instance, self._attr_name)))
+        return ogm.decode(revert.get(ogm.get_node_binding(instance, self._attr_name)))
 
     def __set__(self, instance: Node, value: TVal) -> None:
-        Transaction.put(ogm.get_node_binding(instance, self._attr_name), ogm.encode(value))
+        revert.put(ogm.get_node_binding(instance, self._attr_name), ogm.encode(value))
         ogm.update_node(instance)
 
 
 class ClassField(Generic[TVal], ClassBase[TVal]):
     def __get__(self: TClassBase, instance: Node, owner: Type[Node]) -> TVal:
-        return ogm.decode(Transaction.get(self._binding))
+        return ogm.decode(revert.get(self._binding))
 
     def __set__(self, instance: Node, value: TVal) -> None:
-        Transaction.put(self._binding, ogm.encode(value))
+        revert.put(self._binding, ogm.encode(value))
 
 
 class SetField(Generic[TVal], Base[Set[TVal]]):

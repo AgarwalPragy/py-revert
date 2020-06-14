@@ -18,15 +18,9 @@ from .trie import Trie, split
 TCallable = TypeVar('TCallable', bound=Callable)
 
 __all__ = ['connect', 'undo', 'redo', 'checkout', 'get_commit_dag',
-           'get',
-           'put',
-           'discard',
-           'count_up_or_set',
-           'count_down_or_del',
-           'has',
-           'match_count',
-           'match_keys',
-           'match_items',
+           'safe_get', 'get', 'put', 'delete', 'discard', 'has',
+           'count_up_or_set', 'count_down_or_del', 'match_count', 'match_keys', 'match_items',
+           'transaction',
            'intent_db_connected']
 
 # todo: add more hooks
@@ -160,38 +154,30 @@ def checkout(commit_id: str) -> None:
     commit_id = commit_id.strip()
     history = [commit_id]
     parent = commit_id
+    commit_parents = db_state.commit_parents
     while parent != config.init_commit:
         history.append(parent)
-        parent = commit_parent[parent]
+        if len(commit_parents[parent]) > 1:
+            raise NotImplementedError('Cannot work with multiple parents at present')
+        parent = commit_parents[parent][0]
     history.append(config.init_commit)
     history = history[::-1]
     history_set = set(history)
-    common_ancestor = head
+    common_ancestor = db_state.head
     while common_ancestor not in history_set:
-        with open(os.path.join(dir_, f'{common_ancestor}.json'), 'r') as f:
-            temp = json.loads(f.read())
-            old = temp['old']
-            new = temp['new']
-            for key in new:
-                if key in data:
-                    del data[key]
-            for key, value in old.items():
-                data[key] = value
-        common_ancestor = commit_parent[common_ancestor]
+        with open(os.path.join(db_state.directory, f'{common_ancestor}.json'), 'r') as f:
+            trans = Transaction.from_json(f.read())
+            trans.undo(db_state.state)
+        if len(commit_parents[common_ancestor]) > 1:
+            raise NotImplementedError('Cannot work with multiple parents at present')
+        common_ancestor = commit_parents[common_ancestor][0]
     for commit_id in history[history.index(common_ancestor):]:
         if commit_id == config.init_commit:
             continue
-        with open(os.path.join(dir_, f'{commit_id}.json'), 'r') as f:
-            temp = json.loads(f.read())
-            old = Trie.from_json(temp['old'])
-            new = Trie.from_json(temp['new'])
-            for key in old:
-                if key in data:
-                    del data[key]
-            for key, value in new.items():
-                data[key] = value
-        head = commit_id
-    _update_head()
+        with open(os.path.join(db_state.directory, f'{commit_id}.json'), 'r') as f:
+            trans = Transaction.from_json(f.read())
+            trans.redo(db_state.state)
+        db_state.head = commit_id
 
 
 def undo() -> None:
@@ -216,4 +202,7 @@ def redo() -> None:
     checkout(children[0])
 
 # todo: add merge commit functionality with conflict resolution
-# todo: have multiple ordered parents of each commit. Last parent will be the higest priority and will be the conflict resolution parent
+# todo: have multiple ordered parents of each commit.
+#       Last parent will be the highest priority and will be the conflict resolution parent
+# https://www.cs.tufts.edu/~nr/cs257/archive/david-roundy/theory-patches-2009.pdf
+# https://arxiv.org/abs/1311.3903

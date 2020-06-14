@@ -128,6 +128,30 @@ def test_trie_dict_nested_key_insert_len():
     assert len(t) == 2
 
 
+def test_count_up_or_set():
+    t = Trie()
+    assert t.count_up_or_set(['x']) is None
+    assert t.count_up_or_set(['x']) == 1
+    assert t.count_up_or_set(['x', 'y']) is None
+    assert t.count_up_or_set(['x', 'y']) == 1
+    assert t[['x']] == '2'
+    assert t[['x', 'y']] == '2'
+
+
+def test_count_down_or_del():
+    t = Trie()
+    t.put(['x'], '2')
+    t.put(['x', 'y'], '2')
+    assert t.count_down_or_del(['x']) == 2
+    assert t.count_down_or_del(['x']) == 1
+    assert t.count_down_or_del(['x']) is None
+    assert t.count_down_or_del(['x', 'y']) == 2
+    assert t.count_down_or_del(['x', 'y']) == 1
+    assert t.count_down_or_del(['x', 'y']) is None
+    assert t[['x']] is None
+    assert t[['x', 'y']] is None
+
+
 def test_trie_dict_keys_empty():
     t = Trie()
     assert set(t.keys([])) == set()

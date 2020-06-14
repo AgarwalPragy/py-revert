@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Any
 
 from .trie import Trie
 
@@ -24,6 +24,7 @@ class Transaction:
         return old
 
     def count_up_or_set(self, state: Trie, key: K) -> int:
+        """returns new value"""
         old = state.count_up_or_set(key)
         new = 1 if old is None else old + 1
         self.new_values.put(key, str(new))
@@ -32,6 +33,7 @@ class Transaction:
         return new
 
     def count_down_or_del(self, state: Trie, key: K) -> Optional[int]:
+        """returns new value"""
         old = state.count_down_or_del(key)
         if old is None:
             return None
@@ -77,3 +79,18 @@ class Transaction:
 
     def __bool__(self) -> bool:
         return self.old_values or self.new_values
+
+    def to_json(self) -> Any:
+        return {
+            'old': self.old_values.to_json(),
+            'new': self.new_values.to_json(),
+            'messages': self.messages
+        }
+
+    @staticmethod
+    def from_json(json: Any) -> Transaction:
+        trans = Transaction(json['messages'][0])
+        trans.messages = json['messages']
+        trans.old_values = Trie.from_json(json['old'])
+        trans.new_values = Trie.from_json(json['new'])
+        return trans

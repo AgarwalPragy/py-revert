@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import AbstractSet, Any, Dict as tDict, Iterable, Iterator, List, Mapping, MutableMapping, MutableSet, Set as tSet, Tuple, TypeVar, overload
+from typing import AbstractSet, Any, Dict as tDict, Iterable, Iterator, List, Mapping, MutableMapping, MutableSet, \
+    Set as tSet, Tuple, TypeVar, overload
 
-from revert import Transaction
+import revert
 
 __all__ = ['Set', 'ProtectedSet', 'Dict', 'ProtectedDict']
 
@@ -24,17 +25,17 @@ class BaseSet(AbstractSet[TVal]):
     def __iter__(self) -> Iterator[TVal]:
         pattern = f'{self.__binding__}'
         start = len(pattern) + 1
-        for key in Transaction.match_keys(pattern):
+        for key in revert.match_keys(pattern):
             value = ogm.decode(key[start:])
             yield value
 
     def __contains__(self, item: Any) -> bool:
         """ x.__contains__(y) <==> y in x. """
-        return Transaction.has(f'{self.__binding__}/{ogm.encode(item)}')
+        return revert.has(f'{self.__binding__}/{ogm.encode(item)}')
 
     def __len__(self) -> int:
         """ Return len(self). """
-        return Transaction.match_count(f'{self.__binding__}')
+        return revert.match_count(f'{self.__binding__}')
 
     def __bool__(self) -> bool:
         return len(self) > 0
@@ -59,20 +60,20 @@ class Set(BaseSet[TVal], MutableSet[TVal]):
         self.__instance__ = kwargs.get('__instance__', None)
 
     def add(self, item: TVal) -> None:
-        Transaction.put(f'{self.__binding__}/{ogm.encode(item)}', '')
+        revert.put(f'{self.__binding__}/{ogm.encode(item)}', '')
         ogm.update_node(self.__instance__)
 
     def clear(self) -> None:
-        for key in Transaction.match_keys(f'{self.__binding__}'):
-            Transaction.delete(key)
+        for key in revert.match_keys(f'{self.__binding__}'):
+            revert.delete(key)
         ogm.update_node(self.__instance__)
 
     def remove(self, item: TVal) -> None:
-        Transaction.delete(f'{self.__binding__}/{ogm.encode(item)}')
+        revert.delete(f'{self.__binding__}/{ogm.encode(item)}')
         ogm.update_node(self.__instance__)
 
     def discard(self, item: TVal) -> None:
-        Transaction.discard(f'{self.__binding__}/{ogm.encode(item)}')
+        revert.discard(f'{self.__binding__}/{ogm.encode(item)}')
         ogm.update_node(self.__instance__)
 
     def update(self, *items: tSet[TVal]) -> None:
@@ -101,37 +102,37 @@ class BaseDict(Mapping[TKey, TVal]):
     def keys(self) -> AbstractSet[TKey]:
         pattern = f'{self.__binding__}'
         start = len(pattern) + 1
-        for key in Transaction.match_keys(pattern):
+        for key in revert.match_keys(pattern):
             k = ogm.decode(key[start:])
             yield k
 
     def values(self) -> List[TVal]:
         pattern = f'{self.__binding__}'
-        for _, value in Transaction.match_items(pattern):
+        for _, value in revert.match_items(pattern):
             v = ogm.decode(value)
             yield v
 
     def items(self) -> List[Tuple[TKey, TVal]]:
         pattern = f'{self.__binding__}'
         start = len(pattern) + 1
-        for key, value in Transaction.match_items(pattern):
+        for key, value in revert.match_items(pattern):
             k = ogm.decode(key[start:])
             v = ogm.decode(value)
             yield k, v
 
     def __getitem__(self, key: TKey) -> TVal:
-        return ogm.decode(Transaction.get(f'{self.__binding__}/{ogm.encode(key)}'))
+        return ogm.decode(revert.get(f'{self.__binding__}/{ogm.encode(key)}'))
 
     def __iter__(self) -> Iterable[TKey]:
         return self.keys()
 
     def __contains__(self, item: Any) -> bool:
         """ x.__contains__(y) <==> y in x. """
-        return Transaction.has(f'{self.__binding__}/{ogm.encode(item)}')
+        return revert.has(f'{self.__binding__}/{ogm.encode(item)}')
 
     def __len__(self) -> int:
         """ Return len(self). """
-        return Transaction.match_count(f'{self.__binding__}')
+        return revert.match_count(f'{self.__binding__}')
 
     def __bool__(self) -> bool:
         return len(self) > 0
@@ -156,16 +157,16 @@ class Dict(BaseDict[TKey, TVal], MutableMapping[TKey, TVal]):
         self.__instance__ = kwargs.get('__instance__', None)
 
     def __setitem__(self, key: TKey, value: TVal) -> None:
-        Transaction.put(f'{self.__binding__}/{ogm.encode(key)}', ogm.encode(value))
+        revert.put(f'{self.__binding__}/{ogm.encode(key)}', ogm.encode(value))
         ogm.update_node(self.__instance__)
 
     def __delitem__(self, key: TKey) -> None:
-        Transaction.delete(f'{self.__binding__}/{ogm.encode(key)}')
+        revert.delete(f'{self.__binding__}/{ogm.encode(key)}')
         ogm.update_node(self.__instance__)
 
     def clear(self) -> None:
-        for key in Transaction.match_keys(f'{self.__binding__}'):
-            Transaction.delete(key)
+        for key in revert.match_keys(f'{self.__binding__}'):
+            revert.delete(key)
         ogm.update_node(self.__instance__)
 
     @overload

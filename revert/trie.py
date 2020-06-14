@@ -35,15 +35,15 @@ class Trie:
                 child = Trie()
                 node.children[k] = child
             node = child
-        oldvalue = node.value
+        old_value = node.value
         node.value = value
-        if oldvalue is None:
+        if old_value is None:
             node.count += 1
             node = self
             for k in key:
                 node.count += 1
                 node = node.children[k]
-        return oldvalue
+        return old_value
 
     def put_if_not_present(self, key: K, value: str) -> None:
         node = self
@@ -60,6 +60,50 @@ class Trie:
             for k in key:
                 node.count += 1
                 node = node.children[k]
+
+    def count_down_or_del(self, key: K) -> Optional[int]:
+        """returns old value"""
+        node = self
+        for k in key:
+            node = node.children.get(k, None)
+            if node is None:
+                return None
+        if node.value is None:
+            return None
+        old_value = int(node.value)
+        new_value = old_value - 1
+        if new_value == 0:
+            node.value = None
+            node.count -= 1
+            node = self
+            for k in key:
+                node.count -= 1
+                node = node.children[k]
+        else:
+            node.value = str(new_value)
+        return old_value
+
+    def count_up_or_set(self, key: K) -> Optional[int]:
+        """returns old value"""
+        node = self
+        for k in key:
+            child = node.children.get(k, None)
+            if child is None:
+                child = Trie()
+                node.children[k] = child
+            node = child
+        old_value = None
+        if node.value is not None:
+            old_value = int(node.value)
+            node.value = str(old_value + 1)
+        else:
+            node.value = '1'
+            node.count += 1
+            node = self
+            for k in key:
+                node.count += 1
+                node = node.children[k]
+        return old_value
 
     def discard(self, key: K) -> Optional[str]:
         node = self
@@ -143,21 +187,21 @@ class Trie:
             return children
 
     @staticmethod
-    def from_json(data: Union[str, Dict[str, Any], Tuple[str, Dict[str, Any]]]) -> Trie:
+    def from_json(json: Union[str, Dict[str, Any], Tuple[str, Dict[str, Any]]]) -> Trie:
         trie = Trie()
-        if data == {}:
+        if json == {}:
             return trie
-        if isinstance(data, str):
-            data = data.strip()
-            trie.value = data
+        if isinstance(json, str):
+            json = json.strip()
+            trie.value = json
             trie.children = {}
         else:
             children: Dict[str, Any] = {}
-            if isinstance(data, (list, tuple)):
-                trie.value, children = data  # type: ignore
-            elif isinstance(data, dict):
+            if isinstance(json, (list, tuple)):
+                trie.value, children = json  # type: ignore
+            elif isinstance(json, dict):
                 trie.value = None
-                children = data  # type: ignore
+                children = json  # type: ignore
             for key, value in children.items():
                 trie.children[key] = Trie.from_json(value)
         count = 0
@@ -176,10 +220,3 @@ class Trie:
 
     def __repr__(self) -> str:
         return str(self.to_json())
-
-    def count_down_or_del(self, key: K) -> Optional[int]:
-
-        pass
-
-    def count_up_or_set(self, key: K) -> Optional[int]:
-        pass
