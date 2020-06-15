@@ -128,12 +128,12 @@ def match_count(prefix: str) -> int:
 
 
 def match_keys(prefix: str) -> Iterator[str]:
-    for key in db_state.state.keys(prefix):
+    for key in db_state.state.keys(split(prefix)):
         yield config.key_separator.join(key)
 
 
 def match_items(prefix: str) -> Iterator[Tuple[str, str]]:
-    for key, value in db_state.state.items(prefix):
+    for key, value in db_state.state.items(split(prefix)):
         yield config.key_separator.join(key), value
 
 
