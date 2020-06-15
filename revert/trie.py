@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 from . import config
@@ -12,12 +14,13 @@ def split(key: str) -> K:
 
 
 class Trie:
-    __slots__ = ['children', 'value', 'count']
+    __slots__ = ['children', 'value', 'count', 'hash']
 
     def __init__(self) -> None:
         self.children: Dict[str, Trie] = {}
         self.value: Optional[str] = None
         self.count: int = 0
+        self.hash: Optional[str] = None
 
     def __getitem__(self, key: K) -> Optional[str]:
         node = self
@@ -26,6 +29,17 @@ class Trie:
             if node is None:
                 return None
         return node.value
+
+    def update_hash(self, key_set: Trie) -> None:
+        for word, child in self.children.items():
+            child_key_set = key_set.children.get(word, None)
+            if child_key_set is not None:
+                child.update_hash(child_key_set)
+        message = json.dumps([
+            self.value,
+            {word: child.hash for word, child in self.children.items()}
+        ])
+        self.hash = hashlib.sha224(message.encode('utf-8')).hexdigest()
 
     def put(self, key: K, value: str) -> Optional[str]:
         node = self
@@ -114,11 +128,16 @@ class Trie:
         oldvalue = node.value
         if oldvalue is not None:
             node.value = None
-            node.count -= 1
             node = self
             for k in key:
                 node.count -= 1
-                node = node.children[k]
+                child = node.children[k]
+                if child.count == 1:
+                    del node.children[k]
+                    break
+                node = child
+            else:
+                node.count -= 1
         return oldvalue
 
     def __contains__(self, key: K) -> bool:
