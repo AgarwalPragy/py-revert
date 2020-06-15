@@ -15,37 +15,30 @@ def test_connect():
     revert.connect(directory)
 
 
-def test_make_single_transaction():
-    with revert.transaction('transaction 1'):
-        revert.put('x', 'x')
-        revert.put('x/y', 'x/y')
-        revert.put('y', 'y')
-        revert.put('z', 'z')
-        revert.put('x/y/z', 'x/y/z')
-        revert.put('z/x', 'z/x')
-    assert revert.get('x') == 'x'
-    assert revert.get('x/y') == 'x/y'
-    assert revert.get('x/y/z') == 'x/y/z'
-    assert revert.get('y') == 'y'
-    assert revert.get('z') == 'z'
-    assert revert.get('z/x') == 'z/x'
+def test_make_transactions():
+    for i in range(5):
+        with revert.transaction('transaction 1'):
+            revert.put('x', str(i))
+            revert.put('x/y', str(i))
+            revert.put('y', str(i))
+            revert.put('z', str(i))
+            revert.put('x/y/z', str(i))
+            revert.put('z/x', str(i))
+
+def _assert_values(i):
+    expected = str(i) if i >= 0 else None
+    assert revert.safe_get('x') == expected
+    assert revert.safe_get('x/y') == expected
+    assert revert.safe_get('y') == expected
+    assert revert.safe_get('z') == expected
+    assert revert.safe_get('x/y/z') == expected
+    assert revert.safe_get('z/x') == expected
 
 
-def test_undo_one():
-    revert.undo()
-    assert revert.safe_get('x') is None
-    assert revert.safe_get('x/y') is None
-    assert revert.safe_get('y') is None
-    assert revert.safe_get('z') is None
-    assert revert.safe_get('x/y/z') is None
-    assert revert.safe_get('z/x') is None
-
-
-def test_redo_one():
-    revert.redo()
-    assert revert.get('x') == 'x'
-    assert revert.get('x/y') == 'x/y'
-    assert revert.get('x/y/z') == 'x/y/z'
-    assert revert.get('y') == 'y'
-    assert revert.get('z') == 'z'
-    assert revert.get('z/x') == 'z/x'
+def test_undo_redo():
+    for i in reversed(range(5)):
+        revert.undo()
+        _assert_values(i - 1)
+    for i in range(5):
+        revert.redo()
+        _assert_values(i)

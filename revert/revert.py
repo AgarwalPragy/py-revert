@@ -4,9 +4,7 @@ import json
 import os
 from contextlib import contextmanager
 from copy import deepcopy
-from datetime import datetime
-from typing import Callable, Dict, List, Optional, Tuple, TypeVar, Iterator
-from uuid import uuid4
+from typing import Dict, List, Optional, Tuple, Iterator
 
 from intent import Intent
 
@@ -14,8 +12,6 @@ from . import config, db_state
 from .exceptions import AmbiguousRedoError, InTransactionError, NoTransactionActiveError, AmbiguousUndoError
 from .transaction import Transaction
 from .trie import Trie, split
-
-TCallable = TypeVar('TCallable', bound=Callable)
 
 __all__ = ['connect', 'undo', 'redo', 'checkout', 'get_commit_dag',
            'safe_get', 'get', 'put', 'delete', 'discard', 'has',
@@ -145,7 +141,10 @@ def transaction(message: str):
     if db_state.active_transactions:
         trans.merge_into(db_state.active_transactions[-1])
     else:
-        commit_id = f'{datetime.now()}_{uuid4()}'
+        db_state.state.update_hash(trans.new_values)
+        db_state.state.update_hash(trans.old_values)
+        commit_id = db_state.state.hash
+        print('creating commit', commit_id)
         with open(os.path.join(db_state.directory, f'{commit_id}.json'), 'w') as f:
             f.write(json.dumps({
                 'parents': [db_state.head],
@@ -162,6 +161,8 @@ def transaction(message: str):
 
 
 def checkout(commit_id: str) -> None:
+    if commit_id == db_state.head:
+        return
     if db_state.active_transactions:
         raise InTransactionError('Cannot checkout a commit while a transaction is active')
     print('checking out', commit_id)
@@ -170,18 +171,22 @@ def checkout(commit_id: str) -> None:
     parent = commit_id
     commit_parents = db_state.commit_parents
     while parent != config.init_commit:
-        history.append(parent)
         if len(commit_parents[parent]) > 1:
             raise NotImplementedError('Cannot work with multiple parents at present')
         parent = commit_parents[parent][0]
-    history.append(config.init_commit)
+        history.append(parent)
     history = history[::-1]
     history_set = set(history)
     common_ancestor = db_state.head
+    changed_keys = Trie()
     while common_ancestor not in history_set:
         with open(os.path.join(db_state.directory, f'{common_ancestor}.json'), 'r') as f:
             trans = Transaction.from_json(json.loads(f.read()))
             trans.undo(db_state.state)
+            for key in trans.new_values.keys([]):
+                changed_keys.put(key, '')
+            for key in trans.old_values.keys([]):
+                changed_keys.put(key, '')
         if len(commit_parents[common_ancestor]) > 1:
             raise NotImplementedError('Cannot work with multiple parents at present')
         common_ancestor = commit_parents[common_ancestor][0]
@@ -191,8 +196,17 @@ def checkout(commit_id: str) -> None:
         with open(os.path.join(db_state.directory, f'{commit_id}.json'), 'r') as f:
             trans = Transaction.from_json(json.loads(f.read()))
             trans.redo(db_state.state)
-        db_state.head = commit_id
-        _update_head()
+            for key in trans.new_values.keys([]):
+                changed_keys.put(key, '')
+            for key in trans.old_values.keys([]):
+                changed_keys.put(key, '')
+    db_state.state.update_hash(db_state.state)
+    if commit_id != config.init_commit and db_state.state.hash != commit_id:
+        print(f'expected hash does not match hash of actual data!\nexpected: {commit_id}\nactual: {db_state.state.hash}')
+        import sys
+        sys.exit(1)
+    db_state.head = commit_id
+    _update_head()
 
 
 def undo() -> None:
