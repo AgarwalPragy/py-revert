@@ -108,3 +108,6 @@ ENV/
 
 # OS
 **/.DS_Store
+
+
+test_tmp_dir

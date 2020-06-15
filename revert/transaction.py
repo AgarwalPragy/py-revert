@@ -14,7 +14,7 @@ class Transaction:
         self.message: str = message
         self.old_values: Trie = Trie()
         self.new_values: Trie = Trie()
-        self.messages: List[str] = []
+        self.messages: List[str] = [message]
 
     def put(self, state: Trie, key: K, value: str) -> Optional[str]:
         old = state.put(key, value)
@@ -68,7 +68,7 @@ class Transaction:
         self.undo(state)
         self.old_values = Trie()
         self.new_values = Trie()
-        self.messages = []
+        self.messages = [self.message]
 
     def merge_into(self, parent: Transaction) -> None:
         for key, value in self.new_values.items([]):

@@ -1,10 +1,13 @@
 import random
 
+import pytest
+
 import revert.config
 from revert.trie import Trie, split
 
 
-def _trie():
+@pytest.fixture
+def custom_trie():
     t = Trie()
     t.put(['x', 'y', 'w', 'a', 'b'], 'value1')
     t.put(['x', 'y'], 'value2')
@@ -157,25 +160,25 @@ def test_trie_dict_keys_empty():
     assert set(t.keys([])) == set()
 
 
-def test_trie_dict_keys():
-    assert _join_keys(_trie().keys([])) == ['x', 'x/y', 'x/y/w/a/b', 'y', 'z/a/b']
+def test_trie_dict_keys(custom_trie):
+    assert _join_keys(custom_trie.keys([])) == ['x', 'x/y', 'x/y/w/a/b', 'y', 'z/a/b']
 
 
-def test_trie_dict_keys_with_prefix():
-    assert _join_keys(_trie().keys(['x'])) == ['x', 'x/y', 'x/y/w/a/b']
+def test_trie_dict_keys_with_prefix(custom_trie):
+    assert _join_keys(custom_trie.keys(['x'])) == ['x', 'x/y', 'x/y/w/a/b']
 
 
 def test_trie_dict_items_empty():
     assert _join_items(Trie().items([])) == []
 
 
-def test_trie_dict_items():
-    assert _join_items(_trie().items([])) == [('x', 'value3'), ('x/y', 'value2'), ('x/y/w/a/b', 'value1'),
-                                              ('y', 'value4'), ('z/a/b', 'value5')]
+def test_trie_dict_items(custom_trie):
+    assert _join_items(custom_trie.items([])) == [('x', 'value3'), ('x/y', 'value2'), ('x/y/w/a/b', 'value1'),
+                                                  ('y', 'value4'), ('z/a/b', 'value5')]
 
 
-def test_trie_dict_items_with_prefix():
-    assert _join_items(_trie().items(['x'])) == [('x', 'value3'), ('x/y', 'value2'), ('x/y/w/a/b', 'value1')]
+def test_trie_dict_items_with_prefix(custom_trie):
+    assert _join_items(custom_trie.items(['x'])) == [('x', 'value3'), ('x/y', 'value2'), ('x/y/w/a/b', 'value1')]
 
 
 def test_to_json_empty():
@@ -235,7 +238,6 @@ def test_trie_dict_hypothesis():
         num_keys = random.randint(0, size)
         for _ in range(num_keys):
             key = ''.join(random.choices('a0!///', k=random.randint(1, key_len)))
-            print(key)
             value = str(random.randint(1, key_len))
             clean_key = '/'.join(split(key))
             t.put(split(key), value)

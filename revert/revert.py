@@ -35,21 +35,32 @@ def get_commit_dag() -> Tuple[str, Dict[str, List[str]], Dict[str, List[str]], D
 def connect(directory: str) -> None:
     print('connecting to db at', directory)
     db_state.directory = directory
-    head_path = os.path.join(db_state.directory, config.head_file)
+    head_path = os.path.join(db_state.directory, f'{config.head_file}_{config.device_name}')
     state = Trie()
     db_state.state = state
-    if os.path.exists(head_path):
-        with open(os.path.join(directory, config.commit_parents_file), 'r') as f:
+    db_state.head = config.init_commit
+    commits_path = os.path.join(directory, config.commit_parents_file)
+    if os.path.exists(commits_path):
+        with open(commits_path, 'r') as f:
             for line in f.readlines():
                 commit, parents, messages = json.loads(line)
-            db_state.commit_parents[commit] = parents
-            db_state.commit_messages[commit] = messages
-            for parent in parents:
-                db_state.commit_children[parent].append(commit)
-        with open(head_path, 'r') as f:
-            expected_head = f.read().strip()
-        checkout(expected_head)
+                db_state.commit_parents[commit] = parents
+                db_state.commit_messages[commit] = messages
+                for parent in parents:
+                    db_state.commit_children[parent].append(commit)
+        if os.path.exists(head_path):
+            with open(head_path, 'r') as f:
+                expected_head = f.read().strip()
+                checkout(expected_head)
+        else:
+            db_state.head = config.init_commit
     intent_db_connected.announce(directory)
+
+
+def _update_head():
+    head_path = os.path.join(db_state.directory, f'{config.head_file}_{config.device_name}')
+    with open(head_path, 'w') as f:
+        f.write(db_state.head)
 
 
 def rollback_current_transaction() -> None:
@@ -145,12 +156,15 @@ def transaction(message: str):
         with open(os.path.join(db_state.directory, config.commit_parents_file), 'a') as f:
             f.write(json.dumps([commit_id, [db_state.head], trans.messages]) + '\n')
         db_state.commit_parents[commit_id].append(db_state.head)
+        db_state.commit_children[db_state.head].append(commit_id)
         db_state.head = commit_id
+        _update_head()
 
 
 def checkout(commit_id: str) -> None:
     if db_state.active_transactions:
         raise InTransactionError('Cannot checkout a commit while a transaction is active')
+    print('checking out', commit_id)
     commit_id = commit_id.strip()
     history = [commit_id]
     parent = commit_id
@@ -166,7 +180,7 @@ def checkout(commit_id: str) -> None:
     common_ancestor = db_state.head
     while common_ancestor not in history_set:
         with open(os.path.join(db_state.directory, f'{common_ancestor}.json'), 'r') as f:
-            trans = Transaction.from_json(f.read())
+            trans = Transaction.from_json(json.loads(f.read()))
             trans.undo(db_state.state)
         if len(commit_parents[common_ancestor]) > 1:
             raise NotImplementedError('Cannot work with multiple parents at present')
@@ -175,9 +189,10 @@ def checkout(commit_id: str) -> None:
         if commit_id == config.init_commit:
             continue
         with open(os.path.join(db_state.directory, f'{commit_id}.json'), 'r') as f:
-            trans = Transaction.from_json(f.read())
+            trans = Transaction.from_json(json.loads(f.read()))
             trans.redo(db_state.state)
         db_state.head = commit_id
+        _update_head()
 
 
 def undo() -> None:
