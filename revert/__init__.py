@@ -6,7 +6,7 @@ from .revert import *
 
 __author__ = """Pragy Agarwal"""
 __email__ = 'agar.pragy@gmail.com'
-__version__ = '0.4.3'
+__version__ = '0.4.4'
 
 # noinspection PyUnresolvedReferences
 from . import ogm
