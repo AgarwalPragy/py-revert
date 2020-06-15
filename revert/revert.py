@@ -144,18 +144,26 @@ def transaction(message: str):
         db_state.state.update_hash(trans.new_values)
         db_state.state.update_hash(trans.old_values)
         commit_id = db_state.state.hash
-        print('creating commit', commit_id)
-        with open(os.path.join(db_state.directory, f'{commit_id}.json'), 'w') as f:
-            f.write(json.dumps({
-                'parents': [db_state.head],
-                'messages': trans.messages,
-                'old': trans.old_values.to_json(),
-                'new': trans.new_values.to_json(),
-            }))
-        with open(os.path.join(db_state.directory, config.commit_parents_file), 'a') as f:
-            f.write(json.dumps([commit_id, [db_state.head], trans.messages]) + '\n')
-        db_state.commit_parents[commit_id].append(db_state.head)
-        db_state.commit_children[db_state.head].append(commit_id)
+        if commit_id == db_state.head:
+            print('Transaction did not change anything! Skipping commit.')
+            return
+        if commit_id not in db_state.commit_parents:
+            print('creating commit', commit_id)
+            with open(os.path.join(db_state.directory, f'{commit_id}.json'), 'w') as f:
+                f.write(json.dumps({
+                    'parents': [db_state.head],
+                    'messages': trans.messages,
+                    'old': trans.old_values.to_json(),
+                    'new': trans.new_values.to_json(),
+                }))
+            with open(os.path.join(db_state.directory, config.commit_parents_file), 'a') as f:
+                f.write(json.dumps([commit_id, [db_state.head], trans.messages]) + '\n')
+            db_state.commit_parents[commit_id].append(db_state.head)
+            db_state.commit_children[db_state.head].append(commit_id)
+        else:
+            # transaction wasn't empty, but ended up recreating an existing commit!
+            # todo: create a pseudo-child?
+            pass
         db_state.head = commit_id
         _update_head()
 
@@ -200,7 +208,7 @@ def checkout(commit_id: str) -> None:
                 changed_keys.put(key, '')
             for key in trans.old_values.keys([]):
                 changed_keys.put(key, '')
-    db_state.state.update_hash(db_state.state)
+    db_state.state.update_hash(changed_keys)
     if commit_id != config.init_commit and db_state.state.hash != commit_id:
         print(f'expected hash does not match hash of actual data!\nexpected: {commit_id}\nactual: {db_state.state.hash}')
         import sys
